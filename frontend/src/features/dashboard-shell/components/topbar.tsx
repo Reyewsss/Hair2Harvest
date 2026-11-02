@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { X, Sun, Moon } from "lucide-react";
 import { BellIcon, CmdIcon, ImportProductIcon, SearchIcon } from "./icons";
 import { Button, buttonVariants } from "@/shared/ui/button";
 import {
@@ -18,12 +18,15 @@ import {
 } from "@/shared/ui/input-group";
 import { SidebarTrigger } from "@/shared/ui/sidebar";
 import { notifications } from "../data";
+import { useTheme } from "./theme-provider";
 
 export function DashboardTopbar() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const mobileSearchInputRef = useRef<HTMLInputElement>(null);
+
+  const { theme, toggleTheme } = useTheme();
 
   const openMobileSearch = () => {
     setIsMobileSearchOpen(true);
@@ -132,6 +135,22 @@ export function DashboardTopbar() {
               onClick={openMobileSearch}
             >
               <SearchIcon className="size-4.5" />
+            </Button>
+
+            {/* 👇 FIXED DARK MODE TOGGLE BUTTON 👇 */}
+            <Button
+              type="button"
+              variant="secondary"
+              size="icon-lg"
+              className="relative size-10 overflow-hidden"
+              aria-label="Toggle theme"
+              onClick={toggleTheme}
+            >
+              {theme === "dark" ? (
+                <Sun className="size-5 transition-all duration-300 animate-in spin-in-90 zoom-in" />
+              ) : (
+                <Moon className="size-5 transition-all duration-300 animate-in spin-in-90 zoom-in" />
+              )}
             </Button>
 
             <DropdownMenu>
