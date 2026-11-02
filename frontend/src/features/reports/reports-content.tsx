@@ -9,8 +9,8 @@ import {
   Shield,
   Wallet,
 } from "lucide-react";
-import { ChevronDownIcon } from "../../dashboard-shell/components/icons";
-import { ReportStatusBadge } from "../../../shared/shared";
+import { ChevronDownIcon } from "../dashboard-shell/components/icons";
+import { ReportStatusBadge } from "../../shared/shared";
 import { Button, buttonVariants } from "@/shared/ui/button";
 import {
   DropdownMenu,
@@ -35,7 +35,7 @@ import {
   type GeneratedReport,
   type ReportStatus,
   type ReportType,
-} from "../../dashboard-shell/data";
+} from "../dashboard-shell/data";
 import { cn } from "@/lib/utils";
 
 type ReportTypeFilter = "all" | ReportType;

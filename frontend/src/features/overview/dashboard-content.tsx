@@ -13,7 +13,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { DashboardLink } from "../../dashboard-shell/components/navigation.tsx";
+import { DashboardLink } from "../dashboard-shell/components/navigation.tsx";
 import { Button, buttonVariants } from "@/shared/ui/button.tsx";
 import {
   DropdownMenu,
@@ -44,7 +44,7 @@ import {
   type MetricCard,
   type Role,
   type StreamTable,
-} from "../data/overview-data.tsx";
+} from "./data/overview-data.tsx";
 
 // `role` should come from the logged-in user.
 export function DashboardContent({ role = "admin" }: { role?: Role }) {

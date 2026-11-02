@@ -1,4 +1,5 @@
-import { LogOut, Moon, Settings, Sun, User } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ChevronDown, LogOut, Moon, Settings, Sun, User } from "lucide-react";
 import Logo from "../../../assets/hair2harvest-logo.svg";
 import { SidebarToggleIcon } from "./icons";
 import { DashboardLink, useDashboardNavigation } from "./navigation";
@@ -8,7 +9,7 @@ import { Button } from "@/shared/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
+  DropdownMenuGroup, // 👈 Make sure this is imported
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -25,6 +26,12 @@ import {
   useSidebar,
 } from "@/shared/ui/sidebar";
 import { currentUser, workspaceNavigation, type NavigationItem } from "../data";
+import {
+  INVENTORY_HREF,
+  getActiveInventoryTab,
+  inventoryTabs,
+  isInventorySection,
+} from "@/features/inventory/data/inventory-tabs";
 import { cn } from "@/lib/utils";
 
 const dropdownTriggerClassName =
@@ -75,6 +82,138 @@ function NavItem({ item }: { item: NavigationItem }) {
   );
 }
 
+function InventoryNavGroup({ item }: { item: NavigationItem }) {
+  const { pathname } = useDashboardNavigation();
+  const { state, isMobile, setOpenMobile } = useSidebar();
+  const activeTab = getActiveInventoryTab(pathname);
+  const isOverview = pathname === INVENTORY_HREF;
+  const inSection = isInventorySection(pathname);
+  const isCollapsed = state === "collapsed" && !isMobile;
+  const [open, setOpen] = useState(inSection);
+
+  useEffect(() => {
+    if (inSection) setOpen(true);
+  }, [inSection]);
+
+  const closeMobile = () => {
+    if (isMobile) setOpenMobile(false);
+  };
+
+  return (
+    <SidebarMenuItem>
+      {isCollapsed ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            type="button"
+            aria-label={item.name}
+            className={cn(
+              "flex size-12 items-center justify-center rounded-xl text-muted-foreground outline-hidden hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+              inSection &&
+                "bg-sidebar-accent text-primary [filter:var(--shadow-sidebar-item)]",
+            )}
+          >
+            <item.icon className="size-5" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            side="right"
+            align="start"
+            className="astrix-dashboard w-48"
+          >
+            {/* 👇 FIXED: Wrapped the label and separator in a MenuGroup */}
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="font-normal text-muted-foreground">
+                {item.name}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+            </DropdownMenuGroup>
+
+            <DropdownMenuItem
+              className={cn(isOverview && "font-medium text-primary")}
+              render={<DashboardLink href={item.href} />}
+              nativeButton={false} // 👈 FIXED: Tells Base UI this isn't a native button
+            >
+              Overview
+            </DropdownMenuItem>
+            {inventoryTabs.map((tab) => (
+              <DropdownMenuItem
+                key={tab.value}
+                className={cn(
+                  activeTab === tab.value && "font-medium text-primary",
+                )}
+                render={<DashboardLink href={tab.href} />}
+                nativeButton={false} // 👈 FIXED
+              >
+                {tab.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : (
+        <>
+          <SidebarMenuButton
+            isActive={isOverview}
+            tooltip={item.name}
+            className="h-auto [&_svg]:size-5"
+            render={
+              <DashboardLink
+                href={item.href}
+                aria-current={isOverview ? "page" : undefined}
+                onClick={closeMobile}
+                className={cn(
+                  "group/nav flex h-12 w-full items-center gap-2.5 overflow-hidden rounded-xl py-2.5 pr-11 pl-3 text-muted-foreground hover:text-foreground",
+                  "transition-[width,padding] ease-linear",
+                  inSection && "text-primary",
+                  "aria-[current=page]:bg-sidebar-accent aria-[current=page]:text-primary aria-[current=page]:[filter:var(--shadow-sidebar-item)]",
+                )}
+              />
+            }
+          >
+            <item.icon className="size-5" />
+            <span className="truncate text-base">{item.name}</span>
+          </SidebarMenuButton>
+
+          <button
+            type="button"
+            aria-label={
+              open ? "Collapse inventory menu" : "Expand inventory menu"
+            }
+            aria-expanded={open}
+            onClick={() => setOpen((value) => !value)}
+            className="absolute top-2 right-2 flex size-8 items-center justify-center rounded-lg text-muted-foreground outline-hidden hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+          >
+            <ChevronDown
+              className={cn(
+                "size-4 transition-transform",
+                open && "rotate-180",
+              )}
+            />
+          </button>
+
+          {open ? (
+            <ul className="mx-3.5 mt-1 flex min-w-0 flex-col gap-1 border-l border-sidebar-border px-2.5 py-0.5">
+              {inventoryTabs.map((tab) => (
+                <li key={tab.value}>
+                  <DashboardLink
+                    href={tab.href}
+                    aria-current={activeTab === tab.value ? "page" : undefined}
+                    onClick={closeMobile}
+                    className={cn(
+                      "flex h-9 items-center rounded-lg px-3 text-sm text-muted-foreground transition-colors hover:text-foreground",
+                      "aria-[current=page]:bg-sidebar-accent aria-[current=page]:font-medium aria-[current=page]:text-primary",
+                    )}
+                  >
+                    {tab.label}
+                  </DashboardLink>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </>
+      )}
+    </SidebarMenuItem>
+  );
+}
+
 export function DashboardSidebar() {
   const { toggleSidebar } = useSidebar();
   const { theme, toggleTheme } = useTheme();
@@ -82,7 +221,6 @@ export function DashboardSidebar() {
   return (
     <Sidebar
       collapsible="icon"
-      // Added m-3, rounded-xl, border, shadow, and dynamic height calculation
       className="m-3 h-[calc(110.6svh-1.3rem)] group-data-[collapsible=icon]:m-3 group-data-[collapsible=icon]:h-[calc(110svh-1.3rem)] rounded-xl border border-border/50 shadow-md bg-sidebar transition-all duration-300"
     >
       <SidebarHeader className="h-16 flex-row items-center rounded-xl justify-between px-3 transition-[padding] ease-linear group-data-[collapsible=icon]:px-4.25">
@@ -90,7 +228,6 @@ export function DashboardSidebar() {
           <img
             src={Logo}
             alt="Hair2Harvest logo"
-            // Added w-8 h-8 (32px by 32px)
             className="w-8 h-8 object-contain shrink-0 transition-all duration-300"
           />
           <div className="ml-2.75 leading-tight whitespace-nowrap overflow-hidden">
@@ -111,9 +248,13 @@ export function DashboardSidebar() {
 
       <SidebarContent className="overflow-x-hidden px-3 py-4 transition-[padding] ease-linear group-data-[collapsible=icon]:px-4.25">
         <SidebarMenu className="gap-3">
-          {workspaceNavigation.map((item) => (
-            <NavItem key={item.href} item={item} />
-          ))}
+          {workspaceNavigation.map((item) =>
+            item.href === INVENTORY_HREF ? (
+              <InventoryNavGroup key={item.href} item={item} />
+            ) : (
+              <NavItem key={item.href} item={item} />
+            ),
+          )}
         </SidebarMenu>
       </SidebarContent>
 

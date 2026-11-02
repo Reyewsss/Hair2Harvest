@@ -398,16 +398,17 @@ export const generatedReports: GeneratedReport[] = [
   },
 ];
 
+// Navigation items for the workspace sidebar, including icons and optional badges
 export const workspaceNavigation: NavigationItem[] = [
   { name: "Dashboard", href: "/", icon: HomeIcon },
   {
     name: "Accounts",
-    href: "/classification",
+    href: "/accounts",
     icon: UserCog,
     badge: String(classificationQueue.length),
   },
-  { name: "Inventory", href: "/reports", icon: FolderDot },
-  { name: "Machine", href: "/integration", icon: Bot },
-  { name: "Composting", href: "/compliance", icon: Leaf },
-  { name: "Reports", href: "/settings", icon: FileChartLine },
+  { name: "Inventory", href: "/inventory", icon: FolderDot },
+  { name: "Machine", href: "/machine", icon: Bot },
+  { name: "Composting", href: "/composting", icon: Leaf },
+  { name: "Reports", href: "/reports", icon: FileChartLine },
 ];

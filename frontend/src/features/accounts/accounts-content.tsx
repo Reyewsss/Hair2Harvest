@@ -33,7 +33,7 @@ import {
   type AccountRole,
   type AccountRow,
   type AccountStatus,
-} from "../data/accounts-data.tsx";
+} from "./data/accounts-data.tsx";
 import { cn } from "@/lib/utils";
 
 type RoleFilter = "all" | AccountRole;
