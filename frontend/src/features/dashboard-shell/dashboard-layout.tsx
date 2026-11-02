@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
-import { DashboardSidebar } from "./components/astrix/sidebar";
-import { DashboardTopbar } from "./components/astrix/topbar";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { DashboardSidebar } from "./components/sidebar";
+import { DashboardTopbar } from "./components/topbar";
+import { SidebarProvider } from "@/shared/ui/sidebar";
 import "./dashboard.css";
 
 type DashboardLayoutProps = {

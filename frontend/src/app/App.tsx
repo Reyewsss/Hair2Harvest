@@ -1,7 +1,7 @@
 // App.tsx
 import { Routes, Route, Navigate } from "react-router";
-import LoginPage from "./pages/auth/login-page.tsx";
-import AstrixDashboardDemo from "./components/watermelon/astrix-dashboard/demo";
+import LoginPage from "../features/auth/components/login-page.tsx";
+import AstrixDashboardDemo from "../features/overview/data/demo.tsx";
 
 const App = () => {
   return (

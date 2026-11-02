@@ -6,7 +6,7 @@ import {
   //   IntegrationIcon,
   //   ReportsIcon,
   //   SettingsIcon,
-} from "./components/astrix/icons";
+} from "./components/icons";
 
 import {
   UserCog,

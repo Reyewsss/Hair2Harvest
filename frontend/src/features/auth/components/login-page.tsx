@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { useNavigate } from "react-router";
-import Logo from "../../assets/hair2harvest-logo.svg";
+import Logo from "../../../assets/hair2harvest-logo.svg";
 
 const LoginPage = () => {
   const navigate = useNavigate();

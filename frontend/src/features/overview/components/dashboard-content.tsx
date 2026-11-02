@@ -13,15 +13,15 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { DashboardLink } from "./navigation";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { DashboardLink } from "../../dashboard-shell/components/navigation.tsx";
+import { Button, buttonVariants } from "@/shared/ui/button.tsx";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/shared/ui/dropdown-menu.tsx";
 import {
   Table,
   TableBody,
@@ -29,7 +29,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@/shared/ui/table.tsx";
 import {
   batchTemperature,
   dateRangeOptions,
@@ -44,7 +44,7 @@ import {
   type MetricCard,
   type Role,
   type StreamTable,
-} from "../../overview-data.tsx";
+} from "../data/overview-data.tsx";
 
 // `role` should come from the logged-in user.
 export function DashboardContent({ role = "admin" }: { role?: Role }) {

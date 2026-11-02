@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { BellIcon, CmdIcon, ImportProductIcon, SearchIcon } from "./icons";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/shared/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,14 +10,14 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/shared/ui/dropdown-menu";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
-} from "@/components/ui/input-group";
-import { SidebarTrigger } from "@/components/ui/sidebar";
-import { notifications } from "../../data";
+} from "@/shared/ui/input-group";
+import { SidebarTrigger } from "@/shared/ui/sidebar";
+import { notifications } from "../data";
 
 export function DashboardTopbar() {
   const [searchQuery, setSearchQuery] = useState("");

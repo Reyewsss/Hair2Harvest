@@ -1,6 +1,12 @@
 import { Clock } from "lucide-react";
-import { CheckCircleIcon, WarningCircleIcon } from "./icons";
-import type { ClassificationStatus, ReportStatus } from "../../data";
+import {
+  CheckCircleIcon,
+  WarningCircleIcon,
+} from "../features/dashboard-shell/components/icons";
+import type {
+  ClassificationStatus,
+  ReportStatus,
+} from "../features/dashboard-shell/data";
 
 const classificationStatusConfig = {
   approved: {

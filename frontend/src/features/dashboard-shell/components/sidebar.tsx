@@ -1,10 +1,10 @@
 import { LogOut, Moon, Settings, Sun, User } from "lucide-react";
-import Logo from "../../../../../assets/hair2harvest-logo.svg";
+import Logo from "../../../assets/hair2harvest-logo.svg";
 import { SidebarToggleIcon } from "./icons";
 import { DashboardLink, useDashboardNavigation } from "./navigation";
 import { useTheme } from "./theme-provider";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/shared/ui/avatar";
+import { Button } from "@/shared/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,7 +13,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/shared/ui/dropdown-menu";
 import {
   Sidebar,
   SidebarContent,
@@ -23,12 +23,8 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
-} from "@/components/ui/sidebar";
-import {
-  currentUser,
-  workspaceNavigation,
-  type NavigationItem,
-} from "../../data";
+} from "@/shared/ui/sidebar";
+import { currentUser, workspaceNavigation, type NavigationItem } from "../data";
 import { cn } from "@/lib/utils";
 
 const dropdownTriggerClassName =

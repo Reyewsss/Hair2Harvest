@@ -9,16 +9,16 @@ import {
   Shield,
   Wallet,
 } from "lucide-react";
-import { ChevronDownIcon } from "./icons";
-import { ReportStatusBadge } from "./shared";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { ChevronDownIcon } from "../../dashboard-shell/components/icons";
+import { ReportStatusBadge } from "../../../shared/shared";
+import { Button, buttonVariants } from "@/shared/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/shared/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -26,7 +26,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@/shared/ui/table";
 import {
   dateRangeOptions,
   generatedReports,
@@ -35,7 +35,7 @@ import {
   type GeneratedReport,
   type ReportStatus,
   type ReportType,
-} from "../../data";
+} from "../../dashboard-shell/data";
 import { cn } from "@/lib/utils";
 
 type ReportTypeFilter = "all" | ReportType;

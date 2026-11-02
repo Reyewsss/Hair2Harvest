@@ -7,19 +7,19 @@ import {
   Plus,
   Search,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/shared/ui/button.tsx";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/shared/ui/dropdown-menu.tsx";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
-} from "@/components/ui/input-group";
+} from "@/shared/ui/input-group.tsx";
 import {
   Table,
   TableBody,
@@ -27,13 +27,13 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@/shared/ui/table.tsx";
 import {
   accounts,
   type AccountRole,
   type AccountRow,
   type AccountStatus,
-} from "../../accounts-data.tsx";
+} from "../data/accounts-data.tsx";
 import { cn } from "@/lib/utils";
 
 type RoleFilter = "all" | AccountRole;

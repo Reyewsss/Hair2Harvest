@@ -1,13 +1,13 @@
 import type { ReactNode } from "react";
-import DashboardLayout from "./dashboard-layout";
-import { AccountManagementContent } from "./components/astrix/accounts-content";
-import { DashboardContent } from "./components/astrix/dashboard-content";
+import DashboardLayout from "../../dashboard-shell/dashboard-layout";
+import { AccountManagementContent } from "../../accounts/components/accounts-content";
+import { DashboardContent } from "../components/dashboard-content";
 import {
   DashboardNavigationProvider,
   useDashboardNavigation,
-} from "./components/astrix/navigation";
-import { ReportsContent } from "./components/astrix/reports-content";
-import { ThemeProvider } from "./components/astrix/theme-provider";
+} from "../../dashboard-shell/components/navigation";
+import { ReportsContent } from "../../reports/components/reports-content";
+import { ThemeProvider } from "../../dashboard-shell/components/theme-provider";
 
 function DashboardRoute() {
   const { pathname } = useDashboardNavigation();
