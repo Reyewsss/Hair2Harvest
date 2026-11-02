@@ -10,6 +10,8 @@ import { ReportsContent } from "../../reports/reports-content";
 import { ThemeProvider } from "../../dashboard-shell/components/theme-provider";
 import { InventoryContent } from "@/features/inventory/pages/inventory-content";
 import { InventoryViewPage } from "@/features/inventory/pages/inventory-view-page";
+import { CompostingContent } from "@/features/composting/pages/composting-content";
+import { MachineContent } from "@/features/machine/pages/machine-content.tsx";
 
 function DashboardRoute() {
   const { pathname } = useDashboardNavigation();
@@ -24,9 +26,9 @@ function DashboardRoute() {
     // /inventory/schedule, /inventory/tracking, /inventory/stock, ...
     content = <InventoryViewPage tab={pathname.split("/")[2]} />;
   } else if (pathname === "/machine") {
-    content = <ReportsContent />;
+    content = <MachineContent />;
   } else if (pathname === "/composting") {
-    content = <ReportsContent />;
+    content = <CompostingContent />;
   } else if (pathname === "/reports") {
     content = <ReportsContent />;
   }

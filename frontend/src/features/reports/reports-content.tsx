@@ -1,22 +1,20 @@
-import { useMemo, useState, type ComponentType, type SVGProps } from "react";
+// features/reports/components/reports-content.tsx
+import { useState } from "react";
 import {
-  ArrowRight,
   Calendar,
-  ClipboardList,
+  FileDown,
+  FileSpreadsheet,
   FileText,
-  FolderDown,
-  ListFilter,
-  Shield,
-  Wallet,
+  Filter,
+  Search,
 } from "lucide-react";
-import { ChevronDownIcon } from "../dashboard-shell/components/icons";
-import { ReportStatusBadge } from "../../shared/shared";
-import { Button, buttonVariants } from "@/shared/ui/button";
+import { Button } from "@/shared/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/shared/ui/dropdown-menu";
 import {
@@ -28,348 +26,221 @@ import {
   TableRow,
 } from "@/shared/ui/table";
 import {
-  dateRangeOptions,
-  generatedReports,
-  reportTypes,
-  type DateRange,
-  type GeneratedReport,
+  REPORT_CATEGORIES,
+  mockBatches,
+  mockGeneratedReports,
+  mockShops,
+  type ExportFormat,
+  type ReportCategory,
   type ReportStatus,
-  type ReportType,
-} from "../dashboard-shell/data";
-import { cn } from "@/lib/utils";
-
-type ReportTypeFilter = "all" | ReportType;
-type ReportStatusFilter = "all" | ReportStatus;
-
-type SvgIcon = ComponentType<SVGProps<SVGSVGElement>>;
-
-const reportTypeIcons: Record<ReportType, SvgIcon> = {
-  "cf-28": FileText,
-  "cf-29": Wallet,
-  "classification-audit": ClipboardList,
-  "compliance-summary": Shield,
-};
-
-const reportTypeFilterOptions: { value: ReportTypeFilter; label: string }[] = [
-  { value: "all", label: "All Report Type" },
-  ...reportTypes.map((type) => ({
-    value: type.id as ReportTypeFilter,
-    label: type.typeLabel,
-  })),
-];
-
-const reportStatusFilterOptions: {
-  value: ReportStatusFilter;
-  label: string;
-}[] = [
-  { value: "all", label: "All Status" },
-  { value: "completed", label: "Completed" },
-  { value: "processing", label: "Processing" },
-];
+} from "./data/reports-data.tsx";
 
 export function ReportsContent() {
-  const [typeFilter, setTypeFilter] = useState<ReportTypeFilter>("all");
-  const [statusFilter, setStatusFilter] = useState<ReportStatusFilter>("all");
-  const [dateRange, setDateRange] = useState<DateRange>("last-7-days");
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [activeCategory, setActiveCategory] =
+    useState<ReportCategory>("collection");
+  const [selectedShop, setSelectedShop] = useState("All Shops");
+  const [selectedBatch, setSelectedBatch] = useState("All Batches");
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const filteredReports = useMemo(() => {
-    return generatedReports.filter((report) => {
-      const matchesType =
-        typeFilter === "all" ? true : report.type === typeFilter;
-      const matchesStatus =
-        statusFilter === "all" ? true : report.status === statusFilter;
-      return matchesType && matchesStatus;
-    });
-  }, [typeFilter, statusFilter]);
+  // Filter logic
+  const filteredReports = mockGeneratedReports.filter((report) => {
+    const matchesCategory = report.category === activeCategory;
+    const matchesShop =
+      selectedShop === "All Shops" || report.shopName === selectedShop;
+    const matchesBatch =
+      selectedBatch === "All Batches" || report.batchId === selectedBatch;
+    const matchesSearch = report.name
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase());
+    return matchesCategory && matchesShop && matchesBatch && matchesSearch;
+  });
 
-  const typeFilterLabel =
-    reportTypeFilterOptions.find((option) => option.value === typeFilter)
-      ?.label ?? "All Report Type";
-  const statusFilterLabel =
-    reportStatusFilterOptions.find((option) => option.value === statusFilter)
-      ?.label ?? "All Status";
-  const dateRangeLabel =
-    dateRangeOptions.find((option) => option.value === dateRange)?.label ??
-    "Last 7 Days";
+  const handleExport = (format: ExportFormat) => {
+    // Mock export function
+    alert(`Exporting ${activeCategory} report as ${format}...`);
+  };
 
-  const typeFilterControl = (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        type="button"
-        className={buttonVariants({
-          variant: "secondary",
-          className: "h-10 w-full justify-between gap-1 px-3 md:h-8 md:w-auto",
-        })}
+  const StatusBadge = ({ status }: { status: ReportStatus }) => {
+    const styles = {
+      completed: "bg-success/10 text-success",
+      processing: "bg-primary/10 text-primary",
+      failed: "bg-destructive/10 text-destructive",
+    };
+    return (
+      <span
+        className={`inline-flex items-center rounded-xl px-2 py-0.5 text-xs font-medium capitalize ${styles[status]}`}
       >
-        <span className="truncate">{typeFilterLabel}</span>
-        <ChevronDownIcon className="size-5 shrink-0" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        collisionPadding={16}
-        className="astrix-dashboard min-w-44"
-      >
-        <DropdownMenuRadioGroup
-          value={typeFilter}
-          onValueChange={(value) => setTypeFilter(value as ReportTypeFilter)}
-        >
-          {reportTypeFilterOptions.map((option) => (
-            <DropdownMenuRadioItem
-              key={option.value}
-              value={option.value}
-              className="font-normal text-muted-foreground data-[state=checked]:font-medium data-[state=checked]:text-foreground"
-            >
-              {option.label}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-
-  const statusFilterControl = (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        type="button"
-        className={buttonVariants({
-          variant: "secondary",
-          className: "h-10 w-full justify-between gap-1 px-3 md:h-8 md:w-auto",
-        })}
-      >
-        <span className="truncate">{statusFilterLabel}</span>
-        <ChevronDownIcon className="size-5 shrink-0" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        collisionPadding={16}
-        className="astrix-dashboard min-w-40"
-      >
-        <DropdownMenuRadioGroup
-          value={statusFilter}
-          onValueChange={(value) =>
-            setStatusFilter(value as ReportStatusFilter)
-          }
-        >
-          {reportStatusFilterOptions.map((option) => (
-            <DropdownMenuRadioItem
-              key={option.value}
-              value={option.value}
-              className="font-normal text-muted-foreground data-[state=checked]:font-medium data-[state=checked]:text-foreground"
-            >
-              {option.label}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-
-  const dateFilterControl = (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        type="button"
-        className={buttonVariants({
-          variant: "secondary",
-          className: "h-10 min-w-0 justify-between gap-2 px-3 md:h-8 md:w-auto",
-        })}
-      >
-        <span className="flex min-w-0 items-center gap-2">
-          <Calendar className="size-5 shrink-0" />
-          <span className="truncate">{dateRangeLabel}</span>
-        </span>
-        <ChevronDownIcon className="size-5 shrink-0" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        collisionPadding={16}
-        className="astrix-dashboard min-w-40"
-      >
-        <DropdownMenuRadioGroup
-          value={dateRange}
-          onValueChange={(value) => setDateRange(value as DateRange)}
-        >
-          {dateRangeOptions.map((option) => (
-            <DropdownMenuRadioItem
-              key={option.value}
-              value={option.value}
-              className="font-normal text-muted-foreground data-[state=checked]:font-medium data-[state=checked]:text-foreground"
-            >
-              {option.label}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
+        {status}
+      </span>
+    );
+  };
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-10 px-4 pt-8 pb-10 md:px-6">
-      <div className="space-y-2">
-        <h1 className="text-2xl font-semibold">Compliance Reports</h1>
-        <p className="text-lg text-muted-foreground">
-          Generate and manage regulatory compliance documentation
-        </p>
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 pt-8 pb-10 md:px-6">
+      {/* HEADER */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold">Reporting Center</h1>
+          <p className="text-lg text-muted-foreground">
+            Generate, filter, and export operational data.
+          </p>
+        </div>
+
+        {/* EXPORT BUTTON */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button className="gap-2">
+              <FileDown className="size-4" /> Export Current View
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuLabel>Export Format</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => handleExport("CSV")}
+              className="gap-2 cursor-pointer"
+            >
+              <FileText className="size-4" /> Export as CSV
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => handleExport("PDF")}
+              className="gap-2 cursor-pointer"
+            >
+              <FileText className="size-4 text-red-500" /> Export as PDF
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => handleExport("Excel")}
+              className="gap-2 cursor-pointer"
+            >
+              <FileSpreadsheet className="size-4 text-green-600" /> Export as
+              Excel
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
-      <section className="flex flex-col gap-4">
-        <h2 className="text-lg font-medium">
-          Select a report type to generate compliance documentation
-        </h2>
-
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {reportTypes.map((type) => {
-            const Icon = reportTypeIcons[type.id];
-
-            return (
-              <div
-                key={type.id}
-                className="flex flex-col gap-8 rounded-xl border p-4 pb-3.5"
-              >
-                <div className="flex size-11 items-center justify-center rounded-lg bg-secondary">
-                  <Icon className="size-5" />
-                </div>
-
-                <div className="flex flex-1 flex-col gap-4">
-                  <div className="space-y-1">
-                    <p className="text-sm font-semibold">{type.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {type.description}
-                    </p>
-                  </div>
-
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="h-10 w-full gap-2"
-                  >
-                    Generate Report
-                    <ArrowRight className="size-4.5" />
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="flex flex-col gap-5">
-        <div className="flex flex-col gap-4 md:hidden">
-          <div className="space-y-2">
-            <h2 className="text-lg font-medium">Generated Reports</h2>
-            <p className="text-sm text-muted-foreground">
-              Download and manage compliance documentation
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="min-w-0 flex-1">{dateFilterControl}</div>
-
-            <Button
-              type="button"
-              variant="outline"
-              className="h-10 shrink-0 gap-2 px-3"
-              aria-expanded={filtersOpen}
-              onClick={() => setFiltersOpen((open) => !open)}
+      {/* CATEGORY TABS */}
+      <div className="flex overflow-x-auto border-b pb-px hide-scrollbar">
+        <div className="flex gap-6">
+          {REPORT_CATEGORIES.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setActiveCategory(cat.id)}
+              className={`whitespace-nowrap pb-3 text-sm font-medium transition-colors border-b-2 ${
+                activeCategory === cat.id
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
             >
-              <span className="flex items-center gap-2">
-                <ListFilter className="size-5 shrink-0" />
-                Filters
-              </span>
-              <ChevronDownIcon
-                className={cn(
-                  "size-5 shrink-0 transition-transform",
-                  filtersOpen && "rotate-180",
-                )}
-              />
-            </Button>
+              {cat.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* FILTERS ROW */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-card p-4 rounded-xl border">
+        <div className="flex flex-1 flex-wrap items-center gap-3">
+          {/* Search */}
+          <div className="relative w-full max-w-xs">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search reports..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-sm outline-none focus:ring-1 focus:ring-primary"
+            />
           </div>
 
-          {filtersOpen ? (
-            <div className="flex flex-col gap-2 min-[380px]:flex-row">
-              <div className="min-w-0 flex-1">{typeFilterControl}</div>
-              <div className="min-w-0 flex-1">{statusFilterControl}</div>
-            </div>
-          ) : null}
+          {/* Date Range */}
+          <Button variant="outline" className="h-9 gap-2 text-muted-foreground">
+            <Calendar className="size-4" /> Last 30 Days
+          </Button>
+
+          {/* Shop Filter */}
+          <select
+            value={selectedShop}
+            onChange={(e) => setSelectedShop(e.target.value)}
+            className="h-9 rounded-md border bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-primary"
+          >
+            {mockShops.map((shop) => (
+              <option key={shop} value={shop}>
+                {shop}
+              </option>
+            ))}
+          </select>
+
+          {/* Batch Filter */}
+          <select
+            value={selectedBatch}
+            onChange={(e) => setSelectedBatch(e.target.value)}
+            className="h-9 rounded-md border bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-primary"
+          >
+            {mockBatches.map((batch) => (
+              <option key={batch} value={batch}>
+                {batch}
+              </option>
+            ))}
+          </select>
         </div>
+      </div>
 
-        <div className="@container/reports-header hidden w-full min-w-0 md:block">
-          <div className="flex w-full min-w-0 flex-col gap-4 @min-[52rem]/reports-header:flex-row @min-[52rem]/reports-header:items-end @min-[52rem]/reports-header:justify-between">
-            <div className="min-w-0 space-y-2 @min-[52rem]/reports-header:min-w-56">
-              <h2 className="text-lg font-medium">Generated Reports</h2>
-              <p className="text-sm text-muted-foreground">
-                Download and manage compliance documentation
-              </p>
-            </div>
-
-            <div className="flex w-full min-w-0 items-center justify-between gap-2 @min-[52rem]/reports-header:w-auto">
-              {dateFilterControl}
-              <div className="flex items-center gap-2">
-                {typeFilterControl}
-                {statusFilterControl}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <Table className="min-w-215">
-          <colgroup>
-            <col className="w-[36%]" />
-            <col className="w-[16%]" />
-            <col className="w-[16%]" />
-            <col className="w-[16%]" />
-            <col className="w-[16%]" />
-          </colgroup>
+      {/* DATA TABLE */}
+      <div className="rounded-xl border bg-card overflow-hidden">
+        <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Report Name</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>Shop / Location</TableHead>
               <TableHead>Date Generated</TableHead>
-              <TableHead>Action</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredReports.map((report) => (
-              <ReportRowItem key={report.id} report={report} />
-            ))}
+            {filteredReports.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={5}
+                  className="h-32 text-center text-muted-foreground"
+                >
+                  No reports found matching your filters.
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredReports.map((report) => (
+                <TableRow key={report.id}>
+                  <TableCell className="font-medium">
+                    {report.name}
+                    <p className="text-xs text-muted-foreground font-normal">
+                      {report.id}
+                    </p>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {report.shopName}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {report.dateGenerated}
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge status={report.status} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={report.status !== "completed"}
+                    >
+                      Download
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
-      </section>
+      </div>
     </div>
-  );
-}
-
-function ReportRowItem({ report }: { report: GeneratedReport }) {
-  const canDownload = report.status === "completed";
-
-  return (
-    <TableRow>
-      <TableCell className="whitespace-normal">
-        <div className="space-y-1">
-          <p className="font-medium">{report.name}</p>
-          <p className="text-sm text-muted-foreground">{report.id}</p>
-        </div>
-      </TableCell>
-      <TableCell>{report.typeLabel}</TableCell>
-      <TableCell>
-        <ReportStatusBadge status={report.status} />
-      </TableCell>
-      <TableCell className="text-muted-foreground">
-        {report.generated}
-      </TableCell>
-      <TableCell>
-        <Button
-          type="button"
-          variant="ghost"
-          size="lg"
-          disabled={!canDownload}
-          className="gap-2"
-        >
-          Download
-          <FolderDown className="size-5" />
-        </Button>
-      </TableCell>
-    </TableRow>
   );
 }
