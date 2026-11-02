@@ -109,7 +109,7 @@ const LoginPage = () => {
 
           {/* Forgot Password Link */}
           <a
-            href="#forgot"
+            href="/forgot-password"
             className="block text-center mt-4 text-[13px] font-medium text-[#AEB784] transition-colors duration-300 hover:text-[#41431B]"
           >
             Forgot Password?
