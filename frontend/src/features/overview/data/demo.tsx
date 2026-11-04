@@ -15,6 +15,7 @@ import { MachineContent } from "@/features/machine/pages/machine-content.tsx";
 import { SuppliersContent } from "@/features/suppliers/pages/suppliers-content";
 import { SupplierDetailPage } from "@/features/suppliers/pages/supplier-detail-page";
 import { LabResultsContent } from "@/features/lab-results/pages/lab-results-content";
+import { QualityContent } from "@/features/quality/pages/quality-content";
 
 function DashboardRoute() {
   const { pathname } = useDashboardNavigation();
@@ -38,6 +39,8 @@ function DashboardRoute() {
     content = <CompostingContent />;
   } else if (pathname === "/lab-results") {
     content = <LabResultsContent />;
+  } else if (pathname === "/quality") {
+    content = <QualityContent />;
   } else if (pathname === "/reports") {
     content = <ReportsContent />;
   }

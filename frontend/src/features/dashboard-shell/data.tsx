@@ -16,6 +16,7 @@ import {
   Leaf, // Replacement for PlantPot
   Store,
   FlaskConical,
+  ShieldCheck,
 } from "lucide-react";
 
 export type SvgIcon = ComponentType<SVGProps<SVGSVGElement>>;
@@ -414,5 +415,6 @@ export const workspaceNavigation: NavigationItem[] = [
   { name: "Machine", href: "/machine", icon: Bot },
   { name: "Composting", href: "/composting", icon: Leaf },
   { name: "Lab Results", href: "/lab-results", icon: FlaskConical },
+  { name: "Quality", href: "/quality", icon: ShieldCheck },
   { name: "Reports", href: "/reports", icon: FileChartLine },
 ];
