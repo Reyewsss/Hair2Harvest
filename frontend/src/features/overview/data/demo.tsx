@@ -16,6 +16,8 @@ import { SuppliersContent } from "@/features/suppliers/pages/suppliers-content";
 import { SupplierDetailPage } from "@/features/suppliers/pages/supplier-detail-page";
 import { LabResultsContent } from "@/features/lab-results/pages/lab-results-content";
 import { QualityContent } from "@/features/quality/pages/quality-content";
+import { ExperimentsContent } from "@/features/experiments/pages/experiments-content";
+import { ExperimentDetailPage } from "@/features/experiments/pages/experiment-detail-page";
 
 function DashboardRoute() {
   const { pathname } = useDashboardNavigation();
@@ -41,6 +43,10 @@ function DashboardRoute() {
     content = <LabResultsContent />;
   } else if (pathname === "/quality") {
     content = <QualityContent />;
+  } else if (pathname === "/experiments") {
+    content = <ExperimentsContent />;
+  } else if (pathname.startsWith("/experiments/")) {
+    content = <ExperimentDetailPage id={pathname.split("/")[2]} />;
   } else if (pathname === "/reports") {
     content = <ReportsContent />;
   }

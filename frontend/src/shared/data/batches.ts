@@ -17,6 +17,8 @@ export type BatchRef = {
   machine: string;
   startedAt: string;
   stage: BatchStage;
+  /** Suppliers whose hair went into this batch (see the supplier registry). */
+  supplierIds: string[];
 };
 
 export const batches: BatchRef[] = [
@@ -27,6 +29,7 @@ export const batches: BatchRef[] = [
     machine: "Composter A",
     startedAt: "2026-10-18",
     stage: "composting",
+    supplierIds: ["S-01", "S-04"],
   },
   {
     code: "CMP-2026-002",
@@ -35,6 +38,7 @@ export const batches: BatchRef[] = [
     machine: "Composter A",
     startedAt: "2026-10-08",
     stage: "curing",
+    supplierIds: ["S-01", "S-02"],
   },
   {
     code: "CMP-2026-003",
@@ -43,6 +47,7 @@ export const batches: BatchRef[] = [
     machine: "Composter B",
     startedAt: "2026-09-28",
     stage: "quality review",
+    supplierIds: ["S-01", "S-02", "S-04"],
   },
   {
     code: "CMP-2026-004",
@@ -51,6 +56,7 @@ export const batches: BatchRef[] = [
     machine: "Composter B",
     startedAt: "2026-10-02",
     stage: "quality review",
+    supplierIds: ["S-02", "S-07"],
   },
   {
     code: "CMP-2026-005",
@@ -59,6 +65,7 @@ export const batches: BatchRef[] = [
     machine: "Composter B",
     startedAt: "2026-10-24",
     stage: "sampling",
+    supplierIds: ["S-04", "S-07", "S-08"],
   },
 ];
 

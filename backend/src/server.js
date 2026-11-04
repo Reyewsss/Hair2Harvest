@@ -8,6 +8,7 @@ import supplierRoutes from './modules/suppliers/supplierRoutes.js';
 import collectionRoutes from './modules/collections/collectionRoutes.js';
 import labResultRoutes from './modules/lab-results/labResultRoutes.js';
 import qualityRoutes from './modules/quality/qualityRoutes.js';
+import experimentRoutes from './modules/experiments/experimentRoutes.js';
 
 dotenv.config(); // Load environment variables from .env file
 
@@ -35,6 +36,9 @@ app.use('/api/lab-results', labResultRoutes);
 
 // Quality thresholds, evaluation and admin-authorised status changes
 app.use('/api/quality', qualityRoutes);
+
+// Planting experiments, growth logs and traceability
+app.use('/api/experiments', experimentRoutes);
 
 // Sample route to test the server
 app.use('/api/sample', sampleRoutes);
