@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FileUp, FlaskConical } from "lucide-react";
 import { Button } from "../../../shared/ui/button.tsx";
 import { Field, fieldClass } from "../../../shared/ui/form-controls.tsx";
 import { Textarea } from "../../../shared/ui/textarea.tsx";
-import { batchCodes, batchOptions } from "../../../shared/data/batches";
+import { useBatches } from "../../../shared/data/use-batches";
 import {
   laboratories,
   latestVersion,
@@ -17,7 +17,7 @@ import { useLabResults } from "../store/lab-results-store";
 const today = () => new Date().toISOString().slice(0, 10);
 
 const initialForm = {
-  batchCode: batchCodes[0],
+  batchCode: "",
   labName: laboratories[0],
   method: testMethods[0],
   sampledAt: today(),
@@ -39,7 +39,15 @@ const initialForm = {
 
 export function NewResultView({ onDone }: { onDone: () => void }) {
   const { results, addResult } = useLabResults();
+  const { batches, batchOptions } = useBatches();
   const [form, setForm] = useState(initialForm);
+
+  // Default to the first batch once the list arrives.
+  useEffect(() => {
+    if (!form.batchCode && batches.length > 0) {
+      setForm((current) => ({ ...current, batchCode: batches[0].code }));
+    }
+  }, [batches, form.batchCode]);
   const [attachment, setAttachment] = useState<LabAttachment | null>(null);
 
   const set = <K extends keyof typeof initialForm>(

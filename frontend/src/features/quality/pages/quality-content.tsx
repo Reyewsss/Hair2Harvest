@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { SegmentedTabs, SummaryCard } from "../../../shared/ui/form-controls.tsx";
-import { batches } from "../../../shared/data/batches";
+import { useBatches } from "../../../shared/data/use-batches";
 import { useLabResults } from "../../lab-results/store/lab-results-store";
 import { latestResult } from "../../lab-results/data/lab-results-data";
 import { useQuality } from "../store/quality-store";
@@ -13,6 +13,7 @@ type QualityTab = "board" | "thresholds";
 export function QualityContent() {
   const [tab, setTab] = useState<QualityTab>("board");
   const { results } = useLabResults();
+  const { batches } = useBatches();
   const { thresholds, decisions } = useQuality();
 
   const rows = batches.map((batch) => {

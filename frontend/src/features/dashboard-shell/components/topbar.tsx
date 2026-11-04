@@ -78,7 +78,7 @@ export function DashboardTopbar() {
               ref={mobileSearchInputRef}
               className="h-full p-0 px-1.5!"
               aria-label="Search"
-              placeholder="Search products, HS codes, classifications..."
+              placeholder="Search suppliers, batches, results..."
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
             />
@@ -107,7 +107,7 @@ export function DashboardTopbar() {
                 ref={searchInputRef}
                 className="h-full p-0 px-1.5!"
                 aria-label="Search"
-                placeholder="Search products, HS codes, classifications..."
+                placeholder="Search suppliers, batches, results..."
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
               />

@@ -2,9 +2,12 @@ import { useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { useNavigate } from "react-router";
 import Logo from "../../../assets/hair2harvest-logo.svg";
+import { api } from "@/shared/lib/api";
 
 const LoginPage = () => {
   const navigate = useNavigate();
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
     email: "",
@@ -20,15 +23,27 @@ const LoginPage = () => {
     }));
   };
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    console.log("Login submitted:", formData);
+    setError(null);
+    setSubmitting(true);
 
-    localStorage.setItem("isAuthenticated", "true");
-
-    localStorage.setItem("userEmail", formData.email);
-    localStorage.setItem("userPassword", formData.password);
-    navigate("/dashboard");
+    try {
+      await api.post("/api/auth/login", {
+        email: formData.email,
+        password: formData.password,
+      });
+      // The session lives in an httpOnly cookie; nothing is stored in the browser.
+      navigate("/dashboard");
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to sign in",
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -99,12 +114,22 @@ const LoginPage = () => {
             </label>
           </div>
 
+          {error ? (
+            <p
+              role="alert"
+              className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-[13px] font-medium text-red-700"
+            >
+              {error}
+            </p>
+          ) : null}
+
           {/* Sign In Button */}
           <button
             type="submit"
-            className="w-full py-[13px] text-[15px] font-semibold text-[#F8F3E1] bg-[#41431B] rounded-lg transition-all duration-300 hover:bg-[#2a2b12] hover:shadow-lg active:scale-[0.98]"
+            disabled={submitting}
+            className="w-full py-[13px] text-[15px] font-semibold text-[#F8F3E1] bg-[#41431B] rounded-lg transition-all duration-300 hover:bg-[#2a2b12] hover:shadow-lg active:scale-[0.98] disabled:opacity-60"
           >
-            Sign In
+            {submitting ? "Signing in…" : "Sign In"}
           </button>
 
           {/* Forgot Password Link */}

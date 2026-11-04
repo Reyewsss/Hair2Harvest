@@ -1,93 +1,92 @@
-import { useSyncExternalStore } from "react";
+import { api } from "@/shared/lib/api";
+import { createResourceStore } from "@/shared/lib/resource";
 import {
   defaultThresholds,
-  initialDecisions,
-  initialHistory,
   type Criterion,
   type Decision,
   type HistoryEntry,
   type QualityStatus,
 } from "../data/quality-data";
 
-/* Thresholds, current batch statuses and the append-only status history. */
-
-type QualityState = {
-  thresholds: Criterion[];
-  decisions: Decision[];
-  history: HistoryEntry[];
+type ApiDecision = {
+  batchCode: string;
+  status: QualityStatus;
+  decidedBy?: { name?: string } | string;
+  decidedAt: string;
+  remarks?: string;
 };
 
-let state: QualityState = {
-  thresholds: defaultThresholds,
-  decisions: initialDecisions,
-  history: initialHistory,
-};
+type ApiHistory = ApiDecision & { _id: string; previous: QualityStatus };
 
-const listeners = new Set<() => void>();
+const nameOf = (value?: { name?: string } | string) =>
+  typeof value === "string" ? value : (value?.name ?? "—");
 
-const update = (fn: (state: QualityState) => QualityState) => {
-  state = fn(state);
-  listeners.forEach((listener) => listener());
-};
+const thresholdsStore = createResourceStore(async () => {
+  const data = await api.get<{ criteria: Criterion[] }>(
+    "/api/quality/thresholds",
+  );
+  return data.criteria.length ? data.criteria : defaultThresholds;
+}, [] as Criterion[]);
 
-const subscribe = (listener: () => void) => {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
-};
+const decisionsStore = createResourceStore(async () => {
+  const data = await api.get<{ decisions: ApiDecision[] }>(
+    "/api/quality/decisions",
+  );
+  return data.decisions.map(
+    (decision): Decision => ({
+      batchCode: decision.batchCode,
+      status: decision.status,
+      decidedBy: nameOf(decision.decidedBy),
+      decidedAt: decision.decidedAt,
+      remarks: decision.remarks,
+    }),
+  );
+}, [] as Decision[]);
 
-const getSnapshot = () => state;
-
-/** Admin authorisation is the only way a batch status changes. */
-const authorize = (
-  batchCode: string,
-  status: QualityStatus,
-  remarks: string,
-  decidedBy = "Admin Reyes",
-) =>
-  update((current) => {
-    const previous =
-      current.decisions.find((decision) => decision.batchCode === batchCode)
-        ?.status ?? "Pending";
-
-    const decision: Decision = {
-      batchCode,
-      status,
-      decidedBy,
-      decidedAt: new Date().toISOString().slice(0, 10),
-      remarks: remarks.trim() || undefined,
-    };
-
-    const nextId =
-      Math.max(
-        0,
-        ...current.history.map((entry) => Number(entry.id.replace("QH-", ""))),
-      ) + 1;
-
-    return {
-      ...current,
-      decisions: [
-        ...current.decisions.filter(
-          (entry) => entry.batchCode !== batchCode,
-        ),
-        decision,
-      ],
-      history: [
-        {
-          id: `QH-${String(nextId).padStart(4, "0")}`,
-          previous,
-          ...decision,
-        },
-        ...current.history,
-      ],
-    };
-  });
-
-const saveThresholds = (thresholds: Criterion[]) =>
-  update((current) => ({ ...current, thresholds }));
+const historyStore = createResourceStore(async () => {
+  const data = await api.get<{ history: ApiHistory[] }>("/api/quality/history");
+  return data.history.map(
+    (entry): HistoryEntry => ({
+      id: entry._id,
+      batchCode: entry.batchCode,
+      previous: entry.previous,
+      status: entry.status,
+      decidedBy: nameOf(entry.decidedBy),
+      decidedAt: entry.decidedAt,
+      remarks: entry.remarks,
+    }),
+  );
+}, [] as HistoryEntry[]);
 
 export function useQuality() {
-  const snapshot = useSyncExternalStore(subscribe, getSnapshot);
-  return { ...snapshot, authorize, saveThresholds };
+  const { data: thresholds, loading: thresholdsLoading } =
+    thresholdsStore.useResource();
+  const { data: decisions, loading: decisionsLoading } =
+    decisionsStore.useResource();
+  const { data: history, loading: historyLoading } =
+    historyStore.useResource();
+
+  const authorize = async (
+    batchCode: string,
+    status: QualityStatus,
+    remarks: string,
+  ) => {
+    await api.post("/api/quality/decisions", { batchCode, status, remarks });
+    await Promise.all([decisionsStore.reload(), historyStore.reload()]);
+  };
+
+  const saveThresholds = async (criteria: Criterion[]) => {
+    await api.put("/api/quality/thresholds", { criteria });
+    await thresholdsStore.reload();
+    await decisionsStore.reload();
+  };
+
+  return {
+    thresholds,
+    decisions,
+    history,
+    loading: thresholdsLoading || decisionsLoading || historyLoading,
+    authorize,
+    saveThresholds,
+  };
 }

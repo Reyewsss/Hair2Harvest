@@ -13,7 +13,7 @@ import { FilterDropdown, Pill, fieldClass } from "../../../shared/ui/form-contro
 import { exportCsv } from "../../../shared/lib/export-csv.ts";
 import { EmptyRow } from "../../inventory/components/inventory-shared";
 import { formatDate } from "../../inventory/data/inventory-data";
-import { batchOptions } from "../../../shared/data/batches";
+import { useBatches } from "../../../shared/data/use-batches";
 import {
   labNameOptions,
   maturityOptions,
@@ -34,6 +34,7 @@ const csvColumns: { key: keyof LabResult & string; label: string }[] = [
 
 export function ResultsView() {
   const { results } = useLabResults();
+  const { batchOptions } = useBatches();
   const [query, setQuery] = useState("");
   const [batch, setBatch] = useState<string>("all");
   const [lab, setLab] = useState<string>("all");

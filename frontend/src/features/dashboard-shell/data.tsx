@@ -29,13 +29,6 @@ export type NavigationItem = {
   badge?: string;
 };
 
-export const currentUser = {
-  name: "Vansh Patel",
-  email: "vanshpatel@gmail.com",
-  avatar: "https://api.dicebear.com/10.x/notionists/svg",
-  initials: "VP",
-} as const;
-
 export const notifications = [
   {
     id: "classification-ready",

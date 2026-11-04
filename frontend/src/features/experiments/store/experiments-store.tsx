@@ -1,75 +1,86 @@
-import { useSyncExternalStore } from "react";
-import {
-  initialExperiments,
-  type Experiment,
-  type GrowthEntry,
-  type NewExperiment,
+import { api } from "@/shared/lib/api";
+import { createResourceStore } from "@/shared/lib/resource";
+import type {
+  Experiment,
+  GrowthEntry,
+  HealthScore,
+  NewExperiment,
+  Treatment,
 } from "../data/experiments-data";
 
-/* Experiments and their growth measurements. */
-
-let state: Experiment[] = initialExperiments;
-const listeners = new Set<() => void>();
-
-const update = (fn: (experiments: Experiment[]) => Experiment[]) => {
-  state = fn(state);
-  listeners.forEach((listener) => listener());
+type ApiGrowth = {
+  _id: string;
+  date: string;
+  treatmentId: string;
+  heightCm: number;
+  leafCount: number;
+  health: HealthScore;
+  photo?: string;
+  note?: string;
 };
 
-const subscribe = (listener: () => void) => {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
+type ApiExperiment = {
+  code: string;
+  title: string;
+  crop: string;
+  setup: string;
+  batchCode: string;
+  startDate: string;
+  status: Experiment["status"];
+  treatments: Treatment[];
+  growth?: ApiGrowth[];
+  createdBy?: { name?: string } | string;
 };
 
-const getSnapshot = () => state;
+const toExperiment = (experiment: ApiExperiment): Experiment => ({
+  id: experiment.code,
+  title: experiment.title,
+  crop: experiment.crop,
+  setup: experiment.setup,
+  batchCode: experiment.batchCode,
+  startDate: experiment.startDate,
+  status: experiment.status,
+  treatments: experiment.treatments,
+  growth: (experiment.growth ?? []).map(
+    (entry): GrowthEntry => ({
+      id: entry._id,
+      date: entry.date,
+      treatmentId: entry.treatmentId,
+      heightCm: entry.heightCm,
+      leafCount: entry.leafCount,
+      health: entry.health,
+      photo: entry.photo,
+      note: entry.note,
+    }),
+  ),
+  createdBy:
+    typeof experiment.createdBy === "string"
+      ? experiment.createdBy
+      : (experiment.createdBy?.name ?? "—"),
+});
 
-const nextId = (prefix: string, ids: string[], pad: number) =>
-  `${prefix}-${String(
-    Math.max(0, ...ids.map((id) => Number(id.replace(`${prefix}-`, "")))) + 1,
-  ).padStart(pad, "0")}`;
-
-const addExperiment = (input: NewExperiment) =>
-  update((experiments) => [
-    ...experiments,
-    {
-      ...input,
-      id: nextId(
-        "EXP-2026",
-        experiments.map((experiment) => experiment.id),
-        3,
-      ),
-      growth: [],
-      createdBy: "M. Domer",
-    },
-  ]);
-
-const addGrowth = (experimentId: string, entry: Omit<GrowthEntry, "id">) =>
-  update((experiments) =>
-    experiments.map((experiment) =>
-      experiment.id === experimentId
-        ? {
-            ...experiment,
-            growth: [
-              ...experiment.growth,
-              {
-                ...entry,
-                id: nextId(
-                  "G",
-                  experiments.flatMap((item) =>
-                    item.growth.map((growth) => growth.id),
-                  ),
-                  4,
-                ),
-              },
-            ],
-          }
-        : experiment,
-    ),
+const store = createResourceStore(async () => {
+  const data = await api.get<{ experiments: ApiExperiment[] }>(
+    "/api/experiments",
   );
+  return data.experiments.map(toExperiment);
+}, [] as Experiment[]);
 
 export function useExperiments() {
-  const experiments = useSyncExternalStore(subscribe, getSnapshot);
-  return { experiments, addExperiment, addGrowth };
+  const { data: experiments, loading, error } = store.useResource();
+
+  const addExperiment = async (input: NewExperiment) => {
+    await api.post("/api/experiments", input);
+    await store.reload();
+  };
+
+  const addGrowth = async (
+    experimentId: string,
+    entry: Omit<GrowthEntry, "id">,
+  ) => {
+    await api.post(`/api/experiments/${experimentId}/growth`, entry);
+    await store.reload();
+  };
+
+  return { experiments, loading, error, addExperiment, addGrowth };
 }

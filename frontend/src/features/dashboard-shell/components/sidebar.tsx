@@ -25,7 +25,8 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/shared/ui/sidebar";
-import { currentUser, workspaceNavigation, type NavigationItem } from "../data";
+import { workspaceNavigation, type NavigationItem } from "../data";
+import { useCurrentUser } from "@/shared/auth/use-current-user";
 import {
   INVENTORY_HREF,
   getActiveInventoryTab,
@@ -217,6 +218,7 @@ function InventoryNavGroup({ item }: { item: NavigationItem }) {
 export function DashboardSidebar() {
   const { toggleSidebar } = useSidebar();
   const { theme, toggleTheme } = useTheme();
+  const currentUser = useCurrentUser();
 
   return (
     <Sidebar
@@ -271,10 +273,7 @@ export function DashboardSidebar() {
                 aria-label="Account menu"
               >
                 <Avatar className="size-10 after:border-[0.15625rem]">
-                  <AvatarImage
-                    src={currentUser.avatar}
-                    alt={currentUser.name}
-                  />
+                  <AvatarImage src={undefined} alt={currentUser.name} />
                   <AvatarFallback>{currentUser.initials}</AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1 text-left group-data-[collapsible=icon]:hidden">

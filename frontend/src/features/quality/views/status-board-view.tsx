@@ -13,7 +13,7 @@ import { Field, Pill, fieldClass } from "../../../shared/ui/form-controls.tsx";
 import { Textarea } from "../../../shared/ui/textarea.tsx";
 import { EmptyRow } from "../../inventory/components/inventory-shared";
 import { formatDate } from "../../inventory/data/inventory-data";
-import { batches } from "../../../shared/data/batches";
+import { useBatches } from "../../../shared/data/use-batches";
 import { useLabResults } from "../../lab-results/store/lab-results-store";
 import { latestResult } from "../../lab-results/data/lab-results-data";
 import { useQuality } from "../store/quality-store";
@@ -27,6 +27,7 @@ import {
 
 export function StatusBoardView() {
   const { results } = useLabResults();
+  const { batches } = useBatches();
   const { thresholds, decisions, history, authorize } = useQuality();
   const [selected, setSelected] = useState<string | null>(null);
 

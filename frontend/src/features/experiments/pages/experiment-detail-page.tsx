@@ -14,7 +14,7 @@ import { Textarea } from "../../../shared/ui/textarea.tsx";
 import { EmptyRow } from "../../inventory/components/inventory-shared";
 import { formatDate } from "../../inventory/data/inventory-data";
 import { useDashboardNavigation } from "../../dashboard-shell/components/navigation";
-import { batchByCode } from "../../../shared/data/batches";
+import { useBatches } from "../../../shared/data/use-batches";
 import { useLabResults } from "../../lab-results/store/lab-results-store";
 import { useQuality } from "../../quality/store/quality-store";
 import { useSuppliers } from "../../suppliers/store/suppliers-store";
@@ -51,6 +51,7 @@ function ExperimentDetail({ experiment }: { experiment: Experiment }) {
   const { results } = useLabResults();
   const { decisions } = useQuality();
   const { suppliers } = useSuppliers();
+  const { batchByCode } = useBatches();
   const [open, setOpen] = useState(false);
   const [photo, setPhoto] = useState<string | null>(null);
 

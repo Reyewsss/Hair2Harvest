@@ -1,46 +1,55 @@
-import { useSyncExternalStore } from "react";
-import {
-  initialResults,
-  latestVersion,
-  type LabResult,
-  type NewLabResult,
+import { api } from "@/shared/lib/api";
+import { createResourceStore } from "@/shared/lib/resource";
+import type {
+  LabAttachment,
+  LabResult,
+  LabValues,
+  NewLabResult,
 } from "../data/lab-results-data";
 
-/* Shared lab database. A re-test for the same batch becomes version n+1. */
-
-let state: LabResult[] = initialResults;
-const listeners = new Set<() => void>();
-
-const update = (fn: (results: LabResult[]) => LabResult[]) => {
-  state = fn(state);
-  listeners.forEach((listener) => listener());
+type ApiLabResult = {
+  code: string;
+  batchCode: string;
+  version: number;
+  labName: string;
+  method: string;
+  sampledAt: string;
+  receivedAt: string;
+  values: LabValues;
+  attachment?: LabAttachment;
+  notes?: string;
+  enteredBy?: { name?: string } | string;
 };
 
-const subscribe = (listener: () => void) => {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
-};
+const toResult = (result: ApiLabResult): LabResult => ({
+  id: result.code,
+  batchCode: result.batchCode,
+  version: result.version,
+  labName: result.labName,
+  method: result.method,
+  sampledAt: result.sampledAt,
+  receivedAt: result.receivedAt,
+  values: result.values,
+  attachment: result.attachment,
+  notes: result.notes,
+  enteredBy:
+    typeof result.enteredBy === "string"
+      ? result.enteredBy
+      : (result.enteredBy?.name ?? "—"),
+});
 
-const getSnapshot = () => state;
-
-const addResult = (input: NewLabResult) =>
-  update((results) => {
-    const next =
-      Math.max(...results.map((result) => Number(result.id.slice(3)))) + 1;
-    return [
-      {
-        ...input,
-        id: `LR-${String(next).padStart(4, "0")}`,
-        version: latestVersion(results, input.batchCode) + 1,
-        enteredBy: "M. Domer",
-      },
-      ...results,
-    ];
-  });
+const store = createResourceStore(async () => {
+  const data = await api.get<{ results: ApiLabResult[] }>("/api/lab-results");
+  return data.results.map(toResult);
+}, [] as LabResult[]);
 
 export function useLabResults() {
-  const results = useSyncExternalStore(subscribe, getSnapshot);
-  return { results, addResult };
+  const { data: results, loading, error } = store.useResource();
+
+  const addResult = async (input: NewLabResult) => {
+    await api.post("/api/lab-results", input);
+    await store.reload();
+  };
+
+  return { results, loading, error, addResult };
 }
