@@ -1,4 +1,5 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import sampleRoutes from './modules/sample/sampleRoutes.js';
 import { connectToMongoDB } from './config/db.js';
 import dotenv from 'dotenv';  
@@ -25,6 +26,20 @@ app.use(express.json());
 // Reads the httpOnly auth cookie set on login
 app.use(cookieParser());
 app.use(rateLimiter)
+
+// Health check: confirms the API is up and whether the database is connected.
+// Open http://localhost:5001/api/health in a browser.
+app.get('/api/health', (req, res) => {
+  const states = ['disconnected', 'connected', 'connecting', 'disconnecting'];
+  res.status(200).json({
+    success: true,
+    api: 'ok',
+    database: states[mongoose.connection.readyState] ?? 'unknown',
+    databaseName: mongoose.connection.name || null,
+    host: mongoose.connection.host || null,
+    uptimeSeconds: Math.round(process.uptime()),
+  });
+});
 
 // Auth routes
 app.use('/api/auth', authRoutes);
