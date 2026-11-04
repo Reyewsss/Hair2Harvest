@@ -1,4 +1,15 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import dotenv from 'dotenv';
 import mongoose from 'mongoose';
+
+// A machine-specific .env.local takes precedence over .env. Loaded here with
+// override:true because other modules read .env at import time.
+const localEnv = path.resolve(process.cwd(), '.env.local');
+if (fs.existsSync(localEnv)) {
+  dotenv.config({ path: localEnv, override: true });
+  console.log('Using database settings from .env.local');
+}
 
 // Function to connect to MongoDB using Mongoose
 export const connectToMongoDB = async () => {

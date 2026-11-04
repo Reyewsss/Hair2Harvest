@@ -1,11 +1,20 @@
+import mongoose from "mongoose";
 import Supplier from "./supplierModel.js";
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+/** Accepts the public code (S-01) or a Mongo id. */
+const findSupplier = (identifier) =>
+  Supplier.findOne(
+    mongoose.isValidObjectId(identifier)
+      ? { $or: [{ code: identifier }, { _id: identifier }] }
+      : { code: identifier },
+  ).populate("reviewedBy", "name");
+
 /* GET /api/suppliers?search=&barangay=&status=&page=&limit= */
 export async function listSuppliers(req, res) {
   try {
-    const { search, barangay, status, page = 1, limit = 50 } = req.query;
+    const { search, barangay, status, page = 1, limit = 100 } = req.query;
     const filter = {};
 
     if (barangay) filter.barangay = barangay;
@@ -17,13 +26,15 @@ export async function listSuppliers(req, res) {
         { owner: pattern },
         { email: pattern },
         { shopCode: pattern },
+        { code: pattern },
       ];
     }
 
-    const perPage = Math.min(Number(limit) || 50, 200);
+    const perPage = Math.min(Number(limit) || 100, 200);
     const [suppliers, total] = await Promise.all([
       Supplier.find(filter)
-        .sort({ createdAt: -1 })
+        .populate("reviewedBy", "name")
+        .sort({ code: 1 })
         .skip((Number(page) - 1) * perPage)
         .limit(perPage),
       Supplier.countDocuments(filter),
@@ -41,7 +52,7 @@ export async function listSuppliers(req, res) {
 /* GET /api/suppliers/:id */
 export async function getSupplier(req, res) {
   try {
-    const supplier = await Supplier.findById(req.params.id);
+    const supplier = await findSupplier(req.params.id);
     if (!supplier) {
       return res.status(404).json({ success: false, message: "Supplier not found" });
     }
@@ -76,11 +87,12 @@ export async function createSupplier(req, res) {
       });
     }
 
-    const last = await Supplier.findOne().sort({ createdAt: -1 }).select("shopCode");
-    const nextNumber = last ? Number(last.shopCode.split("-")[1]) + 1 : 101;
+    const last = await Supplier.findOne().sort({ code: -1 }).select("code shopCode");
+    const nextNumber = last ? Number(last.code.split("-")[1]) + 1 : 1;
 
     const supplier = await Supplier.create({
-      shopCode: `BBY-${String(nextNumber).padStart(4, "0")}`,
+      code: `S-${String(nextNumber).padStart(2, "0")}`,
+      shopCode: `BBY-${String(100 + nextNumber).padStart(4, "0")}`,
       shopName,
       owner,
       phone,
@@ -124,14 +136,14 @@ export async function updateSupplier(req, res) {
       Object.entries(req.body).filter(([key]) => allowed.includes(key)),
     );
 
-    const supplier = await Supplier.findByIdAndUpdate(req.params.id, patch, {
-      new: true,
-      runValidators: true,
-    });
-
+    const supplier = await findSupplier(req.params.id);
     if (!supplier) {
       return res.status(404).json({ success: false, message: "Supplier not found" });
     }
+
+    Object.assign(supplier, patch);
+    await supplier.save();
+
     res.status(200).json({ success: true, supplier });
   } catch (error) {
     console.error("Error updating supplier:", error);
@@ -158,20 +170,17 @@ export async function reviewSupplier(req, res) {
         .json({ success: false, message: "Remarks are required to reject a shop" });
     }
 
-    const supplier = await Supplier.findByIdAndUpdate(
-      req.params.id,
-      {
-        status,
-        remarks: remarks?.trim(),
-        reviewedAt: new Date(),
-        reviewedBy: req.userId,
-      },
-      { new: true },
-    );
-
+    const supplier = await findSupplier(req.params.id);
     if (!supplier) {
       return res.status(404).json({ success: false, message: "Supplier not found" });
     }
+
+    supplier.status = status;
+    supplier.remarks = remarks?.trim();
+    supplier.reviewedAt = new Date();
+    supplier.reviewedBy = req.userId;
+    await supplier.save();
+
     res.status(200).json({ success: true, supplier });
   } catch (error) {
     console.error("Error reviewing supplier:", error);

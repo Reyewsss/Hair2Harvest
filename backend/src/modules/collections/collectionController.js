@@ -1,42 +1,50 @@
 import Pickup, { PICKUP_STAGES } from "./pickupModel.js";
 import WeightLog from "./weightLogModel.js";
 
-const DAY = 24 * 60 * 60 * 1000;
-
 const recurrenceStep = { weekly: 7, biweekly: 14, monthly: 30 };
 const recurrenceCount = { none: 1, weekly: 4, biweekly: 3, monthly: 3 };
+
+const addDaysToIso = (iso, days) => {
+  const date = new Date(`${iso}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+};
 
 /** Expands a recurring schedule into one date per pickup. */
 function occurrences(start, recurrence) {
   const count = recurrenceCount[recurrence] ?? 1;
   const step = recurrenceStep[recurrence];
-  if (!step) return [new Date(start)];
-
-  return Array.from({ length: count }, (_, index) => {
-    const date = new Date(start);
-    date.setUTCDate(date.getUTCDate() + step * index);
-    return date;
-  });
+  if (!step) return [start];
+  return Array.from({ length: count }, (_, index) => addDaysToIso(start, step * index));
 }
 
-/* GET /api/collections/pickups?shop=&stage=&from=&to= */
+/** Next zero-padded code for a collection, e.g. P-0007. */
+async function nextCode(Model, prefix, pad) {
+  const last = await Model.findOne({ code: new RegExp(`^${prefix}-`) })
+    .sort({ code: -1 })
+    .select("code");
+  const next = last ? Number(last.code.split("-")[1]) + 1 : 1;
+  return {
+    next,
+    format: (value) => `${prefix}-${String(value).padStart(pad, "0")}`,
+  };
+}
+
+/* GET /api/collections/pickups?supplierCode=&stage=&from=&to= */
 export async function listPickups(req, res) {
   try {
-    const { shop, stage, from, to } = req.query;
+    const { supplierCode, stage, from, to } = req.query;
     const filter = {};
 
-    if (shop) filter.shop = shop;
+    if (supplierCode) filter.supplierCode = supplierCode;
     if (stage) filter.stage = stage;
     if (from || to) {
-      filter.scheduledFor = {};
-      if (from) filter.scheduledFor.$gte = new Date(from);
-      if (to) filter.scheduledFor.$lte = new Date(to);
+      filter.date = {};
+      if (from) filter.date.$gte = from;
+      if (to) filter.date.$lte = to;
     }
 
-    const pickups = await Pickup.find(filter)
-      .populate("shop", "shopName barangay shopCode")
-      .sort({ scheduledFor: 1 });
-
+    const pickups = await Pickup.find(filter).sort({ date: 1, time: 1 });
     res.status(200).json({ success: true, count: pickups.length, pickups });
   } catch (error) {
     console.error("Error listing pickups:", error);
@@ -51,20 +59,27 @@ export async function listPickups(req, res) {
 /* POST /api/collections/pickups — creates the schedule and its repeats. */
 export async function createPickup(req, res) {
   try {
-    const { shop, date, time = "10:00", recurrence = "none", estimatedWeightKg } =
-      req.body;
+    const {
+      supplierCode,
+      date,
+      time = "10:00",
+      recurrence = "none",
+      estimatedWeightKg,
+    } = req.body;
 
-    if (!shop || !date) {
+    if (!supplierCode || !date) {
       return res
         .status(400)
-        .json({ success: false, message: "Shop and date are required" });
+        .json({ success: false, message: "Supplier and date are required" });
     }
 
-    const start = new Date(`${date}T${time}:00`);
+    const { next, format } = await nextCode(Pickup, "P", 4);
     const created = await Pickup.insertMany(
-      occurrences(start, recurrence).map((scheduledFor) => ({
-        shop,
-        scheduledFor,
+      occurrences(date, recurrence).map((day, index) => ({
+        code: format(next + index),
+        supplierCode,
+        date: day,
+        time,
         recurrence,
         estimatedWeightKg,
         createdBy: req.userId,
@@ -89,7 +104,10 @@ export async function createPickup(req, res) {
 /* PATCH /api/collections/pickups/:id/advance — move one stage forward. */
 export async function advancePickup(req, res) {
   try {
-    const pickup = await Pickup.findById(req.params.id);
+    const identifier = req.params.id;
+    const pickup = await Pickup.findOne(
+      identifier.match(/^[0-9a-f]{24}$/) ? { _id: identifier } : { code: identifier },
+    );
     if (!pickup) {
       return res.status(404).json({ success: false, message: "Pickup not found" });
     }
@@ -120,10 +138,12 @@ export async function advancePickup(req, res) {
 
     // Weighing writes the received weight into the raw-hair inventory.
     if (next === "weighed") {
+      const { next: logNumber, format } = await nextCode(WeightLog, "L", 4);
       await WeightLog.create({
-        shop: pickup.shop,
-        pickup: pickup._id,
-        date: pickup.scheduledFor,
+        code: format(logNumber),
+        supplierCode: pickup.supplierCode,
+        pickupCode: pickup.code,
+        date: pickup.date,
         type: "in",
         weightKg: pickup.weightKg,
         createdBy: req.userId,
@@ -141,25 +161,22 @@ export async function advancePickup(req, res) {
   }
 }
 
-/* GET /api/collections/logs?shop=&batchCode=&type=&from=&to= */
+/* GET /api/collections/logs?supplierCode=&batchCode=&type=&from=&to= */
 export async function listLogs(req, res) {
   try {
-    const { shop, batchCode, type, from, to } = req.query;
+    const { supplierCode, batchCode, type, from, to } = req.query;
     const filter = {};
 
-    if (shop) filter.shop = shop;
+    if (supplierCode) filter.supplierCode = supplierCode;
     if (batchCode) filter.batchCode = batchCode;
     if (type) filter.type = type;
     if (from || to) {
       filter.date = {};
-      if (from) filter.date.$gte = new Date(from);
-      if (to) filter.date.$lte = new Date(to);
+      if (from) filter.date.$gte = from;
+      if (to) filter.date.$lte = to;
     }
 
-    const logs = await WeightLog.find(filter)
-      .populate("shop", "shopName barangay")
-      .sort({ date: -1 });
-
+    const logs = await WeightLog.find(filter).sort({ date: -1, code: -1 });
     res.status(200).json({ success: true, count: logs.length, logs });
   } catch (error) {
     console.error("Error listing weight logs:", error);
@@ -174,13 +191,21 @@ export async function listLogs(req, res) {
 /* POST /api/collections/logs — received, rejected or processed weight. */
 export async function createLog(req, res) {
   try {
-    const { shop, pickup, date, type, weightKg, batchCode, reason, note } =
-      req.body;
+    const {
+      supplierCode,
+      pickupCode,
+      date,
+      type,
+      weightKg,
+      batchCode,
+      reason,
+      note,
+    } = req.body;
 
-    if (!shop || !type || !(Number(weightKg) > 0)) {
+    if (!supplierCode || !type || !(Number(weightKg) > 0)) {
       return res.status(400).json({
         success: false,
-        message: "Shop, type and a weight above zero are required",
+        message: "Supplier, type and a weight above zero are required",
       });
     }
     if (type === "rejected" && !reason) {
@@ -189,10 +214,17 @@ export async function createLog(req, res) {
         .json({ success: false, message: "A reason is required for rejections" });
     }
 
+    const { next, format } = await nextCode(
+      WeightLog,
+      type === "rejected" ? "R" : "L",
+      4,
+    );
+
     const log = await WeightLog.create({
-      shop,
-      pickup,
-      date: date ? new Date(date) : new Date(),
+      code: format(next),
+      supplierCode,
+      pickupCode,
+      date: date || new Date().toISOString().slice(0, 10),
       type,
       weightKg,
       batchCode,
@@ -216,15 +248,12 @@ export async function createLog(req, res) {
 export async function inventorySummary(req, res) {
   try {
     const days = Math.min(Number(req.query.days) || 30, 365);
-    const since = new Date(Date.now() - days * DAY);
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
 
-    const [totals] = await WeightLog.aggregate([
-      {
-        $group: {
-          _id: "$type",
-          kg: { $sum: "$weightKg" },
-        },
-      },
+    const totals = await WeightLog.aggregate([
+      { $group: { _id: "$type", kg: { $sum: "$weightKg" } } },
     ]);
 
     const recent = await WeightLog.aggregate([

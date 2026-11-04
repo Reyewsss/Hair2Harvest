@@ -11,14 +11,11 @@ export const REJECT_REASONS = [
 
 const weightLogSchema = new mongoose.Schema(
   {
-    shop: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Supplier",
-      required: true,
-      index: true,
-    },
-    pickup: { type: mongoose.Schema.Types.ObjectId, ref: "Pickup" },
-    date: { type: Date, required: true, index: true },
+    // Human-readable identifier shown in the UI (L-0001 / R-0001).
+    code: { type: String, required: true, unique: true, trim: true },
+    supplierCode: { type: String, required: true, trim: true, index: true },
+    pickupCode: { type: String, trim: true },
+    date: { type: String, required: true, index: true },
     type: {
       type: String,
       enum: ["in", "rejected", "processed"],

@@ -2,6 +2,7 @@ import Experiment, { GrowthLog } from "./experimentModel.js";
 import { QualityDecision } from "../quality/qualityModel.js";
 import LabResult from "../lab-results/labResultModel.js";
 import WeightLog from "../collections/weightLogModel.js";
+import Supplier from "../suppliers/supplierModel.js";
 
 const APPROVED = "Approved for Supervised Testing";
 
@@ -13,10 +14,32 @@ export async function listExperiments(req, res) {
     if (batchCode) filter.batchCode = batchCode;
     if (status) filter.status = status;
 
-    const experiments = await Experiment.find(filter).sort({ startDate: -1 });
-    res
-      .status(200)
-      .json({ success: true, count: experiments.length, experiments });
+    const experiments = await Experiment.find(filter)
+      .sort({ startDate: -1 })
+      .lean();
+
+    const growth = await GrowthLog.find({
+      experiment: { $in: experiments.map((experiment) => experiment._id) },
+    })
+      .sort({ date: 1 })
+      .lean();
+
+    const grouped = new Map();
+    growth.forEach((entry) => {
+      const key = String(entry.experiment);
+      grouped.set(key, [...(grouped.get(key) ?? []), entry]);
+    });
+
+    const withGrowth = experiments.map((experiment) => ({
+      ...experiment,
+      growth: grouped.get(String(experiment._id)) ?? [],
+    }));
+
+    res.status(200).json({
+      success: true,
+      count: withGrowth.length,
+      experiments: withGrowth,
+    });
   } catch (error) {
     console.error("Error listing experiments:", error);
     res.status(500).json({
@@ -73,7 +96,13 @@ export async function createExperiment(req, res) {
       });
     }
 
+    const lastCode = await Experiment.findOne({ code: /^EXP-/ })
+      .sort({ code: -1 })
+      .select("code");
+    const nextNumber = lastCode ? Number(lastCode.code.split("-")[2]) + 1 : 1;
+
     const experiment = await Experiment.create({
+      code: `EXP-${new Date().getFullYear()}-${String(nextNumber).padStart(3, "0")}`,
       title,
       crop,
       setup,
@@ -108,7 +137,10 @@ export async function addGrowthLog(req, res) {
       });
     }
 
-    const experiment = await Experiment.findById(req.params.id);
+    const identifier = req.params.id;
+    const experiment = await Experiment.findOne(
+      identifier.match(/^[0-9a-f]{24}$/) ? { _id: identifier } : { code: identifier },
+    );
     if (!experiment) {
       return res
         .status(404)
@@ -157,16 +189,15 @@ export async function getTraceability(req, res) {
     const [labResults, decision, contributions] = await Promise.all([
       LabResult.find({ batchCode }).sort({ version: -1 }),
       QualityDecision.findOne({ batchCode }),
-      WeightLog.find({ batchCode }).populate("shop", "shopName barangay"),
+      WeightLog.find({ batchCode }).select("supplierCode").lean(),
     ]);
 
-    const suppliers = [
-      ...new Map(
-        contributions
-          .filter((log) => log.shop)
-          .map((log) => [String(log.shop._id), log.shop]),
-      ).values(),
+    const supplierCodes = [
+      ...new Set(contributions.map((log) => log.supplierCode).filter(Boolean)),
     ];
+    const suppliers = await Supplier.find({ code: { $in: supplierCodes } }).select(
+      "code shopName barangay",
+    );
 
     res.status(200).json({
       success: true,

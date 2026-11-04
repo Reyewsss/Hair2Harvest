@@ -15,12 +15,13 @@ const treatmentSchema = new mongoose.Schema(
 
 const experimentSchema = new mongoose.Schema(
   {
+    code: { type: String, required: true, unique: true, trim: true },
     title: { type: String, required: true, trim: true },
     crop: { type: String, required: true, trim: true },
     setup: { type: String, required: true, trim: true },
     // Must reference a batch approved for supervised testing.
     batchCode: { type: String, required: true, index: true },
-    startDate: { type: Date, required: true },
+    startDate: { type: String, required: true },
     status: {
       type: String,
       enum: ["active", "completed"],
@@ -40,7 +41,7 @@ const growthLogSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    date: { type: Date, required: true },
+    date: { type: String, required: true },
     treatmentId: { type: String, required: true },
     heightCm: { type: Number, required: true, min: 0 },
     leafCount: { type: Number, required: true, min: 0 },

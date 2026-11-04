@@ -125,7 +125,9 @@ export async function evaluateBatch(req, res) {
 /* GET /api/quality/decisions */
 export async function listDecisions(req, res) {
   try {
-    const decisions = await QualityDecision.find().sort({ batchCode: 1 });
+    const decisions = await QualityDecision.find()
+      .populate("decidedBy", "name")
+      .sort({ batchCode: 1 });
     res.status(200).json({ success: true, count: decisions.length, decisions });
   } catch (error) {
     console.error("Error listing decisions:", error);
@@ -162,7 +164,7 @@ export async function authorizeStatus(req, res) {
 
     const decision = await QualityDecision.findOneAndUpdate(
       { batchCode },
-      { status, remarks, decidedBy: req.userId, decidedAt: new Date() },
+      { status, remarks, decidedBy: req.userId, decidedAt: new Date().toISOString().slice(0, 10) },
       { new: true, upsert: true, runValidators: true },
     );
 

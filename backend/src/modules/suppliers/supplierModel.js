@@ -11,6 +11,8 @@ const operatingHoursSchema = new mongoose.Schema(
 
 const supplierSchema = new mongoose.Schema(
   {
+    // Stable public identifier used across modules (S-01, S-02, ...).
+    code: { type: String, required: true, unique: true, trim: true },
     shopCode: { type: String, required: true, unique: true, trim: true },
     shopName: { type: String, required: true, trim: true },
     owner: { type: String, required: true, trim: true },

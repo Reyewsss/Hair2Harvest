@@ -10,13 +10,13 @@ export const PICKUP_STAGES = [
 
 const pickupSchema = new mongoose.Schema(
   {
-    shop: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Supplier",
-      required: true,
-      index: true,
-    },
-    scheduledFor: { type: Date, required: true, index: true },
+    // Human-readable identifier shown in the UI (P-0001).
+    code: { type: String, required: true, unique: true, trim: true },
+    // Business key of the supplier (S-01, S-02, ...) shared across modules.
+    supplierCode: { type: String, required: true, trim: true, index: true },
+    // Calendar date and time as strings so the UI and API agree without time zones.
+    date: { type: String, required: true, index: true },
+    time: { type: String, default: "10:00" },
     recurrence: {
       type: String,
       enum: ["none", "weekly", "biweekly", "monthly"],
@@ -38,7 +38,7 @@ const pickupSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-pickupSchema.index({ shop: 1, scheduledFor: -1 });
+pickupSchema.index({ supplierCode: 1, date: -1 });
 
 const Pickup = mongoose.model("Pickup", pickupSchema);
 

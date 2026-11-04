@@ -37,12 +37,13 @@ const attachmentSchema = new mongoose.Schema(
 
 const labResultSchema = new mongoose.Schema(
   {
+    code: { type: String, required: true, unique: true, trim: true },
     batchCode: { type: String, required: true, trim: true, index: true },
     version: { type: Number, required: true, min: 1 },
     labName: { type: String, required: true, trim: true },
     method: { type: String, required: true, trim: true },
-    sampledAt: { type: Date, required: true },
-    receivedAt: { type: Date, required: true, index: true },
+    sampledAt: { type: String, required: true },
+    receivedAt: { type: String, required: true, index: true },
     values: { type: valuesSchema, required: true },
     attachment: { type: attachmentSchema },
     notes: { type: String, trim: true },

@@ -82,11 +82,14 @@ export async function createResult(req, res) {
       });
     }
 
-    const latest = await LabResult.findOne({ batchCode })
-      .sort({ version: -1 })
-      .select("version");
+    const [latest, lastCode] = await Promise.all([
+      LabResult.findOne({ batchCode }).sort({ version: -1 }).select("version"),
+      LabResult.findOne({ code: /^LR-/ }).sort({ code: -1 }).select("code"),
+    ]);
+    const nextCode = lastCode ? Number(lastCode.code.split("-")[1]) + 1 : 1;
 
     const result = await LabResult.create({
+      code: `LR-${String(nextCode).padStart(4, "0")}`,
       batchCode,
       version: (latest?.version ?? 0) + 1,
       labName,
