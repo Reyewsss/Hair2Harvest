@@ -293,7 +293,7 @@ className="m-3 h-[calc(110.8svh-1.3rem)] group-data-[collapsible=icon]:m-3 group
             className="w-8 h-8 object-contain shrink-0 transition-all duration-300"
           />
           <div className="ml-2.75 leading-tight whitespace-nowrap overflow-hidden">
-            <span className="truncate text-sidebar-primary text-xl font-bold">Hair2Harvest</span>
+            <span className="truncate text-xl text-sidebar-primary font-bold">Hair2Harvest</span>
             <p className="text-[11px] text-muted-foreground">Admin workspace</p>
           </div>
         </div>
@@ -353,7 +353,7 @@ className="m-3 h-[calc(110.8svh-1.3rem)] group-data-[collapsible=icon]:m-3 group
                   <AvatarFallback>{currentUser.initials}</AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1 text-left group-data-[collapsible=icon]:hidden">
-                  <p className="truncate text-base font-semibold">
+                  <p className="truncate text-base text-sidebar-primary font-semibold">
                     {currentUser.name}
                   </p>
                   <p className="truncate text-sm text-muted-foreground">
@@ -386,10 +386,10 @@ className="m-3 h-[calc(110.8svh-1.3rem)] group-data-[collapsible=icon]:m-3 group
                   <Settings />
                   Account Settings
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={toggleTheme}>
+                {/* <DropdownMenuItem onClick={toggleTheme}>
                   {theme === "dark" ? <Sun /> : <Moon />}
-                  {theme === "dark" ? "Light mode" : "Dark mode"}
-                </DropdownMenuItem>
+                  {theme === "dark" ? "Light mode" : "Dark mode"} */}
+                {/* </DropdownMenuItem> */}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem variant="destructive">
                   <LogOut />
