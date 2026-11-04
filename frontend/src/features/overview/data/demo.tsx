@@ -14,6 +14,7 @@ import { CompostingContent } from "@/features/composting/pages/composting-conten
 import { MachineContent } from "@/features/machine/pages/machine-content.tsx";
 import { SuppliersContent } from "@/features/suppliers/pages/suppliers-content";
 import { SupplierDetailPage } from "@/features/suppliers/pages/supplier-detail-page";
+import { LabResultsContent } from "@/features/lab-results/pages/lab-results-content";
 
 function DashboardRoute() {
   const { pathname } = useDashboardNavigation();
@@ -35,6 +36,8 @@ function DashboardRoute() {
     content = <MachineContent />;
   } else if (pathname === "/composting") {
     content = <CompostingContent />;
+  } else if (pathname === "/lab-results") {
+    content = <LabResultsContent />;
   } else if (pathname === "/reports") {
     content = <ReportsContent />;
   }
