@@ -16,7 +16,7 @@ import {
 import Experiment, { GrowthLog } from "../modules/experiments/experimentModel.js";
 import { User } from "../modules/auth/authModel.js";
 
-dotenv.config({ path: ['.env.local', '.env'] });
+dotenv.config();
 
 const DAY = 24 * 60 * 60 * 1000;
 const today = new Date();
@@ -470,17 +470,24 @@ async function seed() {
     QualityStatusHistory.deleteMany({}),
     Experiment.deleteMany({}),
     GrowthLog.deleteMany({}),
-    User.deleteMany({}),
   ]);
 
-  // Admin account used to sign in. OTP verification is bypassed for seeded users.
-  const admin = await User.create({
-    name: "Admin Reyes",
-    email: "admin@hair2harvest.ph",
-    password: await bcrypt.hash("Admin123!", 10),
-    isVerified: true,
-    role: "admin",
-  });
+  console.log(
+    "Cleared: suppliers, batches, pickups, weight logs, lab results, quality, experiments.",
+  );
+
+  // Admin account used to sign in. Existing users are never deleted; the demo
+  // admin is created or updated in place.
+  const admin = await User.findOneAndUpdate(
+    { email: "admin@hair2harvest.ph" },
+    {
+      name: "Admin Reyes",
+      password: await bcrypt.hash("Admin123!", 10),
+      isVerified: true,
+      role: "admin",
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true },
+  );
   console.log("Admin user:", admin.email, "/ Admin123!");
 
   await Supplier.insertMany(

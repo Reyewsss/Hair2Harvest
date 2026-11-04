@@ -12,8 +12,7 @@ import qualityRoutes from './modules/quality/qualityRoutes.js';
 import experimentRoutes from './modules/experiments/experimentRoutes.js';
 import batchRoutes from './modules/batches/batchRoutes.js';
 
-// .env.local wins when present, so a machine-specific database can override .env
-dotenv.config({ path: ['.env.local', '.env'] });
+dotenv.config(); // Load environment variables from .env file
 
 const app = express();
 const PORT = process.env.PORT || 5002;
