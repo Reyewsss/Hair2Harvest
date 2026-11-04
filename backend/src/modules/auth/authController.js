@@ -12,7 +12,9 @@ import { User } from "../auth/authModel.js";
 
 // ----------------------------- Signup Controller --------------------------------------
 export const signup = async (req, res) => {
-	const { email, password, name } = req.body;
+	// Emails are matched case-insensitively, so store them normalised.
+	const email = String(req.body.email ?? "").trim().toLowerCase();
+	const { password, name } = req.body;
 
 	try {
 		if (!email || !password || !name) {
@@ -96,7 +98,8 @@ export const verifyEmail = async (req, res) => {
 
 // ----------------------------- Login Controller --------------------------------------
 export const login = async (req, res) => {
-	const { email, password } = req.body;
+	const email = String(req.body.email ?? "").trim().toLowerCase();
+	const { password } = req.body;
 	try {
 		const user = await User.findOne({ email });
 		if (!user) {

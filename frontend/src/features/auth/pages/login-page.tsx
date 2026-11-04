@@ -30,7 +30,7 @@ const LoginPage = () => {
 
     try {
       await api.post("/api/auth/login", {
-        email: formData.email,
+        email: formData.email.trim(),
         password: formData.password,
       });
       // The session lives in an httpOnly cookie; nothing is stored in the browser.
@@ -139,6 +139,15 @@ const LoginPage = () => {
           >
             Forgot Password?
           </a>
+
+          {/* Development hint — removed from production builds */}
+          {import.meta.env.DEV ? (
+            <p className="mt-4 rounded-lg bg-[#F8F3E1] px-3 py-2 text-center text-[12px] leading-relaxed text-[#41431B]">
+              Demo admin account
+              <br />
+              admin@hair2harvest.ph · Admin123!
+            </p>
+          ) : null}
         </form>
       </div>
     </div>
