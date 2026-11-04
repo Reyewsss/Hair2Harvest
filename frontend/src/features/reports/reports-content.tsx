@@ -5,7 +5,6 @@ import {
   FileDown,
   FileSpreadsheet,
   FileText,
-  Filter,
   Search,
 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
@@ -88,10 +87,8 @@ export function ReportsContent() {
 
         {/* EXPORT BUTTON */}
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button className="gap-2">
-              <FileDown className="size-4" /> Export Current View
-            </Button>
+          <DropdownMenuTrigger render={<Button className="gap-2" />}>
+            <FileDown className="size-4" /> Export Current View
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuLabel>Export Format</DropdownMenuLabel>

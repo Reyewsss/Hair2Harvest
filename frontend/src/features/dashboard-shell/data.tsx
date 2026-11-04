@@ -14,6 +14,7 @@ import {
   FolderDot,
   Bot, // Replacement for RobotArm
   Leaf, // Replacement for PlantPot
+  Store,
 } from "lucide-react";
 
 export type SvgIcon = ComponentType<SVGProps<SVGSVGElement>>;
@@ -407,6 +408,7 @@ export const workspaceNavigation: NavigationItem[] = [
     icon: UserCog,
     badge: String(classificationQueue.length),
   },
+  { name: "Suppliers", href: "/suppliers", icon: Store },
   { name: "Inventory", href: "/inventory", icon: FolderDot },
   { name: "Machine", href: "/machine", icon: Bot },
   { name: "Composting", href: "/composting", icon: Leaf },

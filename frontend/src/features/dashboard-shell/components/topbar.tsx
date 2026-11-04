@@ -170,7 +170,6 @@ export function DashboardTopbar() {
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="center"
-                collisionPadding={16}
                 className="astrix-dashboard w-78"
               >
                 <DropdownMenuGroup>

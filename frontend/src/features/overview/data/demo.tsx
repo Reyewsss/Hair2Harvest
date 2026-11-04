@@ -12,6 +12,8 @@ import { InventoryContent } from "@/features/inventory/pages/inventory-content";
 import { InventoryViewPage } from "@/features/inventory/pages/inventory-view-page";
 import { CompostingContent } from "@/features/composting/pages/composting-content";
 import { MachineContent } from "@/features/machine/pages/machine-content.tsx";
+import { SuppliersContent } from "@/features/suppliers/pages/suppliers-content";
+import { SupplierDetailPage } from "@/features/suppliers/pages/supplier-detail-page";
 
 function DashboardRoute() {
   const { pathname } = useDashboardNavigation();
@@ -20,6 +22,10 @@ function DashboardRoute() {
 
   if (pathname === "/accounts") {
     content = <AccountManagementContent />;
+  } else if (pathname === "/suppliers") {
+    content = <SuppliersContent />;
+  } else if (pathname.startsWith("/suppliers/")) {
+    content = <SupplierDetailPage id={pathname.split("/")[2]} />;
   } else if (pathname === "/inventory") {
     content = <InventoryContent />;
   } else if (pathname.startsWith("/inventory/")) {

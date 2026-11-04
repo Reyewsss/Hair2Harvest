@@ -109,7 +109,6 @@ function OverviewSection({
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="start"
-              collisionPadding={16}
               className="astrix-dashboard min-w-40"
             >
               <DropdownMenuRadioGroup

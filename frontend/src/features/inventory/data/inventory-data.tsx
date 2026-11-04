@@ -1,3 +1,5 @@
+import { initialSuppliers } from "@/features/suppliers/data/suppliers-data";
+
 // Sample data and helpers for the Inventory tab. Replace with API data later.
 
 // Fixed "today" so the sample data always lines up. With real data use:
@@ -94,13 +96,12 @@ export const rejectReasons: { value: RejectReason; label: string }[] = [
   { value: "other", label: "Other" },
 ];
 
-export const shops: Shop[] = [
-  { id: "S-01", name: "Studio Cut Barbers", area: "Cubao" },
-  { id: "S-02", name: "Glow Salon", area: "Katipunan" },
-  { id: "S-03", name: "Kapitan's Barbershop", area: "Commonwealth" },
-  { id: "S-04", name: "Hair & Co.", area: "Timog" },
-  { id: "S-05", name: "Bella Beauty Lounge", area: "Diliman" },
-];
+/* Shops come from the supplier registry so both modules agree on identity. */
+export const shops: Shop[] = initialSuppliers.map((supplier) => ({
+  id: supplier.id,
+  name: supplier.shopName,
+  area: supplier.barangay,
+}));
 
 /* ---------- Date helpers (UTC-based so results don't depend on the time zone) ---------- */
 

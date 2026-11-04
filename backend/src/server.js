@@ -4,6 +4,7 @@ import { connectToMongoDB } from './config/db.js';
 import dotenv from 'dotenv';  
 import rateLimiter from './middleware/rateLimiter.js';
 import authRoutes from './modules/auth/authRoutes.js';
+import supplierRoutes from './modules/suppliers/supplierRoutes.js';
 
 dotenv.config(); // Load environment variables from .env file
 
@@ -19,6 +20,9 @@ app.use(rateLimiter)
 
 // Auth routes
 app.use('/api/auth', authRoutes);
+
+// Supplier registration and verification
+app.use('/api/suppliers', supplierRoutes);
 
 // Sample route to test the server
 app.use('/api/sample', sampleRoutes);
