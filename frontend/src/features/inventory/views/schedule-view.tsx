@@ -16,6 +16,7 @@ import {
   type Pickup,
   type Recurrence,
 } from "../data/inventory-data";
+import { useSuppliers } from "../../suppliers/store/suppliers-store";
 import {
   Field,
   FormPanel,
@@ -34,9 +35,15 @@ export function ScheduleView({
   pickups: Pickup[];
   onAdd: (input: NewPickup) => void;
 }) {
+  const { approved } = useSuppliers();
+  // Only verified shops can be scheduled for collection.
+  const schedulable = approved.length
+    ? approved
+    : shops.map((shop) => ({ id: shop.id, shopName: shop.name }));
+
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
-    shopId: shops[0].id,
+    shopId: schedulable[0]?.id ?? shops[0].id,
     date: TODAY,
     time: "10:00",
     recurrence: "none" as Recurrence,
@@ -86,15 +93,15 @@ export function ScheduleView({
       {open ? (
         <FormPanel onSubmit={handleSubmit}>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-            <Field label="Source (shop)">
+            <Field label="Source (shop)" hint="Verified shops only">
               <select
                 className={fieldClass}
                 value={form.shopId}
                 onChange={(e) => setForm({ ...form, shopId: e.target.value })}
               >
-                {shops.map((s) => (
+                {schedulable.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.name}
+                    {s.shopName}
                   </option>
                 ))}
               </select>

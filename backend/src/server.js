@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import rateLimiter from './middleware/rateLimiter.js';
 import authRoutes from './modules/auth/authRoutes.js';
 import supplierRoutes from './modules/suppliers/supplierRoutes.js';
+import collectionRoutes from './modules/collections/collectionRoutes.js';
 
 dotenv.config(); // Load environment variables from .env file
 
@@ -23,6 +24,9 @@ app.use('/api/auth', authRoutes);
 
 // Supplier registration and verification
 app.use('/api/suppliers', supplierRoutes);
+
+// Pickups, weight logs and raw-hair inventory
+app.use('/api/collections', collectionRoutes);
 
 // Sample route to test the server
 app.use('/api/sample', sampleRoutes);
