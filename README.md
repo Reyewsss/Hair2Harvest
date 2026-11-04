@@ -64,7 +64,7 @@ cd frontend
 npm run dev
 ```
 
-The app will be available at **http://localhost:5002** and the API at **http://localhost:3001**.
+The app will be available at **http://localhost:5001** and the API at **http://localhost:3001**.
 
 ## Documentation
 
