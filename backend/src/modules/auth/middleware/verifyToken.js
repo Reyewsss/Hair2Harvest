@@ -1,17 +1,24 @@
 import jwt from "jsonwebtoken";
+import { User } from "../authModel.js";
+import { COOKIE_NAME } from "../utils/generateTokenAndSetCookie.js";
 
-export const verifyToken = (req, res, next) => {
-	const token = req.cookies.token;
-	if (!token) return res.status(401).json({ success: false, message: "Unauthorized - no token provided" });
-	try {
-		const decoded = jwt.verify(token, process.env.JWT_SECRET);
+// Reads the session cookie and loads the user fresh from the database, so a role change,
+// deactivation or password reset takes effect on the very next request.
+export const verifyToken = async (req, res, next) => {
+  const token = req.cookies?.[COOKIE_NAME];
+  if (!token) return res.status(401).json({ message: "Not authenticated" });
 
-		if (!decoded) return res.status(401).json({ success: false, message: "Unauthorized - invalid token" });
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    if (payload.purpose !== "session") return res.status(401).json({ message: "Not authenticated" });
 
-		req.userId = decoded.userId;
-		next();
-	} catch (error) {
-		console.log("Error in verifyToken ", error);
-		return res.status(500).json({ success: false, message: "Server error" });
-	}
+    const user = await User.findById(payload.id);
+    if (!user || !user.isActive || user.tokenVersion !== payload.tv) {
+      return res.status(401).json({ message: "Session expired. Please sign in again." });
+    }
+    req.user = user;
+    next();
+  } catch {
+    res.status(401).json({ message: "Session expired. Please sign in again." });
+  }
 };

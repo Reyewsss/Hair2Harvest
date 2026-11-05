@@ -1,13 +1,7 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
-// Function to connect to MongoDB using Mongoose
-export const connectToMongoDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log("MongoDB Connected Successfully");
-    return mongoose;
-  } catch (err) {
-    console.error("Error connecting to MongoDB:", error);
-    process.exit(1); // Exit the process with an error code
-  }
-}
+export const connectDB = async () => {
+  if (!process.env.MONGO_URI) throw new Error("MONGO_URI is not set");
+  await mongoose.connect(process.env.MONGO_URI);
+  console.log(`MongoDB connected: ${mongoose.connection.host}/${mongoose.connection.name}`);
+};

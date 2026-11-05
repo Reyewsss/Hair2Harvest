@@ -1,27 +1,33 @@
-// features/auth/components/forgot-password-page.tsx
+// features/auth/pages/forgot-password-page.tsx
 import { useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { useNavigate, Link } from "react-router";
 import Logo from "../../../assets/hair2harvest-logo.svg";
+import { errorMessage } from "@/lib/api";
+import { authApi } from "../auth-api";
 
 const ForgotPasswordPage = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!email) return;
 
-    console.log("OTP requested for:", email);
-
-    // Simulate API call and then show success state or navigate
+    setError("");
     setIsSubmitted(true);
-
-    // Optional: Automatically navigate after a brief pause
-    setTimeout(() => {
-      navigate("/verify-otp", { state: { email } });
-    }, 1500);
+    try {
+      // The server answers the same whether or not the email has an account.
+      await authApi.forgotPassword(email.trim());
+      navigate("/verify-otp", {
+        state: { email: email.trim().toLowerCase(), purpose: "reset" },
+      });
+    } catch (err) {
+      setError(errorMessage(err));
+      setIsSubmitted(false);
+    }
   };
 
   return (
@@ -55,14 +61,23 @@ const ForgotPasswordPage = () => {
               id="email"
               name="email"
               placeholder="Enter your email"
+              autoComplete="username"
               value={email}
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                setEmail(e.target.value)
-              }
+              onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                setEmail(e.target.value);
+                if (error) setError("");
+              }}
               required
               className="w-full px-4 py-[11px] text-[13px] text-[#41431B] bg-white border-2 border-[#E3DBBB] rounded-lg outline-none transition-all duration-300 focus:border-[#AEB784] focus:ring-1 focus:ring-[#AEB784] placeholder:text-gray-400 placeholder:font-light"
             />
           </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-[12px] text-red-600 text-center">{error}</p>
+            </div>
+          )}
 
           <button
             type="submit"

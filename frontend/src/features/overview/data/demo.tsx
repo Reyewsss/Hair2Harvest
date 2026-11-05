@@ -11,12 +11,18 @@ import { ThemeProvider } from "../../dashboard-shell/components/theme-provider";
 import { InventoryContent } from "@/features/inventory/pages/inventory-content";
 import { InventoryViewPage } from "@/features/inventory/pages/inventory-view-page";
 import { MachineContent } from "@/features/machine/pages/machine-content.tsx";
-import { CompostingContent } from "@/features/composting/pages/composting-content.tsx";
-import { SuppliersContent } from "@/features/suppliers/pages/suppliers-content.tsx"
-import { SupplierProfilePage } from "@/features/suppliers/pages/supplier-profile-page.tsx"
+import { CompostingContent } from "@/features/composting/pages/composting-content";
+import { SuppliersContent } from "@/features/suppliers/pages/suppliers-content.tsx";
+import { SupplierProfilePage } from "@/features/suppliers/pages/supplier-profile-page.tsx";
+import { useAuth } from "@/features/auth/context/auth-context";
+
+// 👇 These two imports fix the error
+import { canAccessPath } from "@/features/auth/permissions";
+import { AccessDenied } from "@/features/auth/access-denied";
 
 function DashboardRoute() {
   const { pathname } = useDashboardNavigation();
+  const { user } = useAuth();
 
   let content: ReactNode = <DashboardContent />;
 
@@ -25,21 +31,21 @@ function DashboardRoute() {
   } else if (pathname === "/inventory") {
     content = <InventoryContent />;
   } else if (pathname.startsWith("/inventory/")) {
-    // /inventory/schedule, /inventory/tracking, /inventory/stock, ...
     content = <InventoryViewPage tab={pathname.split("/")[2]} />;
-      } else if (pathname === "/suppliers") {
+  } else if (pathname === "/suppliers") {
     content = <SuppliersContent />;
   } else if (pathname.startsWith("/suppliers/")) {
-    // /suppliers/SUP-001
     content = <SupplierProfilePage supplierId={pathname.split("/")[2]} />;
   } else if (pathname === "/machine") {
     content = <MachineContent />;
   } else if (pathname === "/composting") {
     content = <CompostingContent />;
   } else if (pathname === "/reports" || pathname.startsWith("/reports/")) {
-    // /reports/collection, /reports/equipment, ... (a bare /reports shows the first category)
     content = <ReportsContent category={pathname.split("/")[2]} />;
   }
+
+  // Role check. The server enforces the same rules on every API call.
+  if (user && !canAccessPath(user.role, pathname)) content = <AccessDenied />;
 
   return <DashboardLayout>{content}</DashboardLayout>;
 }

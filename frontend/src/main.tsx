@@ -4,10 +4,12 @@ import "./index.css";
 import App from "./app/App.tsx";
 import { BrowserRouter } from "react-router";
 import "leaflet/dist/leaflet.css";
+import { Toaster } from "sonner";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
+      <Toaster position="top-center" richColors />
       <App />
     </BrowserRouter>
   </StrictMode>,

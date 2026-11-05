@@ -1,21 +1,14 @@
 import nodemailer from "nodemailer";
-import dotenv from "dotenv";
 
-dotenv.config();
+export const mailConfigured = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
 
-const port = Number(process.env.SMTP_PORT) || 465;
+export const transporter = mailConfigured
+  ? nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT) || 587,
+      secure: Number(process.env.SMTP_PORT) === 465,
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    })
+  : null;
 
-export const transporter = nodemailer.createTransport({
-	host: process.env.SMTP_HOST || "smtp.gmail.com",
-	port,
-	secure: port === 465, // 465 = SSL, 587 = STARTTLS (secure must be false)
-	auth: {
-		user: process.env.GMAIL_USER,
-		pass: process.env.GMAIL_APP_PASSWORD, // 16-char Google App Password, NOT your normal password
-	},
-});
-
-export const sender = {
-	name: "Jm Reyes",
-	address: process.env.GMAIL_USER,
-};
+export const mailFrom = process.env.MAIL_FROM || "Hair2Harvest <no-reply@hair2harvest.local>";

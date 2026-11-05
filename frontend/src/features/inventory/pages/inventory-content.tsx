@@ -1,5 +1,5 @@
 import { CalendarPlus, ChevronRight } from "lucide-react";
-import { Button } from "../../../shared/ui/button.tsx";
+import { Button } from "@/shared/ui/button";
 import {
   Table,
   TableBody,
@@ -7,7 +7,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "../../../shared/ui/table.tsx";
+} from "@/shared/ui/table";
 import {
   TODAY,
   fmtKg,
@@ -28,11 +28,13 @@ import {
 } from "../components/inventory-shared";
 import { InventoryLink } from "../components/inventory-link";
 import { VolumeChart } from "../components/volume-chart";
+import { useCan } from "@/features/auth/access";
 import { useInventory } from "../store/inventory-store";
 
 // Overview dashboard for /inventory. The six sub-pages live in the sidebar dropdown.
 export function InventoryContent() {
   const { pickups, logs } = useInventory();
+  const canEdit = useCan("inventory:edit");
   const stock = stockSummary(logs, pickups);
 
   const dueToday = pickups.filter((p) => p.date === TODAY);
@@ -52,14 +54,16 @@ export function InventoryContent() {
               Raw-hair stock, pickups and collection volume at a glance
             </p>
           </div>
-          <Button
-            type="button"
-            className="h-10 gap-1 px-3.5"
-            render={<InventoryLink href={inventoryHref("schedule")} />}
-          >
-            <CalendarPlus className="size-5" />
-            Schedule pickup
-          </Button>
+          {canEdit ? (
+            <Button
+              type="button"
+              className="h-10 gap-1 px-3.5"
+              render={<InventoryLink href={inventoryHref("schedule")} />}
+            >
+              <CalendarPlus className="size-5" />
+              Schedule pickup
+            </Button>
+          ) : null}
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

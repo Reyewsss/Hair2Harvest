@@ -5,7 +5,7 @@ import LogoWhite from "../../../assets/hair2harvest-bnw-logo.svg";
 import { SidebarToggleIcon } from "./icons";
 import { DashboardLink, useDashboardNavigation } from "./navigation";
 import { useTheme } from "./theme-provider";
-import { Avatar, AvatarFallback, AvatarImage } from "@/shared/ui/avatar";
+import { Avatar, AvatarFallback } from "@/shared/ui/avatar";
 import { Button } from "@/shared/ui/button";
 import {
   DropdownMenu,
@@ -26,7 +26,10 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/shared/ui/sidebar";
-import { currentUser, workspaceNavigation, type NavigationItem } from "../data";
+import { workspaceNavigation, type NavigationItem } from "../data";
+import { useAuth } from "@/features/auth/context/auth-context";
+import { ROLE_LABELS, canAccessPath } from "@/features/auth/permissions";
+// Adjust this path to where your inventory folder lives.
 import {
   INVENTORY_HREF,
   getActiveInventoryTab,
@@ -89,6 +92,9 @@ function NavItem({ item }: { item: NavigationItem }) {
   );
 }
 
+// Sidebar items that open a list of sub-pages. Add an entry here to give another item a dropdown.
+// overview: true  -> the row links to the item's own page, and the chevron opens the sub-pages.
+// overview: false -> the row links to the first sub-page (there is no overview page).
 type NavGroupConfig = {
   overview: boolean;
   items: { value: string; label: string; href: string }[];
@@ -111,6 +117,7 @@ const navGroups: Record<string, NavGroupConfig> = {
   },
 };
 
+// Icon-only sidebar: the icon opens a dropdown menu to the right instead of an inline list.
 function NavGroup({
   item,
   group,
@@ -121,10 +128,15 @@ function NavGroup({
   const { pathname } = useDashboardNavigation();
   const { state, isMobile, setOpenMobile } = useSidebar();
   const activeItem = group.activeItem(pathname);
+  const { user } = useAuth();
+  // Sub-pages the signed-in role may open (interns lose Schedule, Tracking and Rejected).
+  const items = group.items.filter(
+    (sub) => !user || canAccessPath(user.role, sub.href),
+  );
   const isOverview = group.overview && pathname === item.href;
   const inSection = group.isSection(pathname);
   const isCollapsed = state === "collapsed" && !isMobile;
-  const linkHref = group.overview ? item.href : group.items[0].href;
+  const linkHref = group.overview ? item.href : (items[0]?.href ?? item.href);
   const [open, setOpen] = useState(inSection);
 
   useEffect(() => {
@@ -135,10 +147,9 @@ function NavGroup({
     if (isMobile) setOpenMobile(false);
   };
 
-  // 👇 NO EARLY RETURN HERE. We use a ternary operator inside the main return.
-  return (
-    <SidebarMenuItem>
-      {isCollapsed ? (
+  if (isCollapsed) {
+    return (
+      <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger
             type="button"
@@ -156,106 +167,105 @@ function NavGroup({
             align="start"
             className="astrix-dashboard w-52"
           >
-            {/* 👇 FIXED: Wrapped in DropdownMenuGroup to prevent Base UI crash */}
-            <DropdownMenuGroup>
-              <DropdownMenuLabel className="font-normal text-muted-foreground">
-                {item.name}
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-            </DropdownMenuGroup>
-
+            <DropdownMenuLabel className="font-normal text-muted-foreground">
+              {item.name}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
             {group.overview ? (
               <DropdownMenuItem
                 className={cn(isOverview && "font-medium text-primary")}
                 render={<DashboardLink href={item.href} />}
-                nativeButton={false}
               >
                 Overview
               </DropdownMenuItem>
             ) : null}
-            {group.items.map((sub) => (
+            {items.map((sub) => (
               <DropdownMenuItem
                 key={sub.value}
                 className={cn(
                   activeItem === sub.value && "font-medium text-primary",
                 )}
                 render={<DashboardLink href={sub.href} />}
-                nativeButton={false}
               >
                 {sub.label}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-      ) : (
-        <>
-          <SidebarMenuButton
-            isActive={isOverview}
-            tooltip={item.name}
-            className="h-auto [&_svg]:size-5"
-            render={
+      </SidebarMenuItem>
+    );
+  }
+
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        isActive={isOverview}
+        tooltip={item.name}
+        className="h-auto [&_svg]:size-5"
+        render={
+          <DashboardLink
+            href={linkHref}
+            aria-current={isOverview ? "page" : undefined}
+            onClick={closeMobile}
+            className={cn(
+              "group/nav flex h-12 w-full items-center gap-2.5 overflow-hidden rounded-xl py-2.5 pr-11 pl-3 text-muted-foreground hover:text-foreground",
+              "transition-[width,padding] ease-linear",
+              inSection && "text-primary",
+              "aria-[current=page]:bg-sidebar-accent aria-[current=page]:text-primary aria-[current=page]:[filter:var(--shadow-sidebar-item)]",
+            )}
+          />
+        }
+      >
+        <item.icon className="size-5" />
+        <span className="truncate text-base">{item.name}</span>
+      </SidebarMenuButton>
+
+      <button
+        type="button"
+        aria-label={
+          open ? `Collapse ${item.name} menu` : `Expand ${item.name} menu`
+        }
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        className="absolute top-2 right-2 flex size-8 items-center justify-center rounded-lg text-muted-foreground outline-hidden hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+      >
+        <ChevronDown
+          className={cn("size-4 transition-transform", open && "rotate-180")}
+        />
+      </button>
+
+      {open ? (
+        <ul className="mx-3.5 mt-1 flex min-w-0 flex-col gap-1 border-l border-sidebar-border px-2.5 py-0.5">
+          {items.map((sub) => (
+            <li key={sub.value}>
               <DashboardLink
-                href={linkHref}
-                aria-current={isOverview ? "page" : undefined}
+                href={sub.href}
+                aria-current={activeItem === sub.value ? "page" : undefined}
                 onClick={closeMobile}
                 className={cn(
-                  "group/nav flex h-12 w-full items-center gap-2.5 overflow-hidden rounded-xl py-2.5 pr-11 pl-3 text-muted-foreground hover:text-foreground",
-                  "transition-[width,padding] ease-linear",
-                  inSection && "text-primary",
-                  "aria-[current=page]:bg-sidebar-accent aria-[current=page]:text-primary aria-[current=page]:[filter:var(--shadow-sidebar-item)]",
+                  "flex h-9 items-center rounded-lg px-3 text-sm text-muted-foreground transition-colors hover:text-foreground",
+                  "aria-[current=page]:bg-sidebar-accent aria-[current=page]:font-medium aria-[current=page]:text-primary",
                 )}
-              />
-            }
-          >
-            <item.icon className="size-5" />
-            <span className="truncate text-base">{item.name}</span>
-          </SidebarMenuButton>
-
-          <button
-            type="button"
-            aria-label={
-              open ? `Collapse ${item.name} menu` : `Expand ${item.name} menu`
-            }
-            aria-expanded={open}
-            onClick={() => setOpen((value) => !value)}
-            className="absolute top-2 right-2 flex size-8 items-center justify-center rounded-lg text-muted-foreground outline-hidden hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-          >
-            <ChevronDown
-              className={cn(
-                "size-4 transition-transform",
-                open && "rotate-180",
-              )}
-            />
-          </button>
-
-          {open ? (
-            <ul className="mx-3.5 mt-1 flex min-w-0 flex-col gap-1 border-l border-sidebar-border px-2.5 py-0.5">
-              {group.items.map((sub) => (
-                <li key={sub.value}>
-                  <DashboardLink
-                    href={sub.href}
-                    aria-current={activeItem === sub.value ? "page" : undefined}
-                    onClick={closeMobile}
-                    className={cn(
-                      "flex h-9 items-center rounded-lg px-3 text-sm text-muted-foreground transition-colors hover:text-foreground",
-                      "aria-[current=page]:bg-sidebar-accent aria-[current=page]:font-medium aria-[current=page]:text-primary",
-                    )}
-                  >
-                    {sub.label}
-                  </DashboardLink>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </>
-      )}
+              >
+                {sub.label}
+              </DashboardLink>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </SidebarMenuItem>
   );
 }
 
+// Sidebar categories. Each section lists the hrefs of the items it contains.
+// Rename a section or move an href to change the grouping. Items not listed here
+// are still shown, in a final group with no heading.
 const navigationSections: { label: string; hrefs: string[] }[] = [
   { label: "Overview", hrefs: ["/"] },
-  { label: "Operations", hrefs: ["/inventory", "/suppliers", "/machine", "/composting"] },
+  {
+    label: "Operations",
+    hrefs: ["/suppliers", "/inventory", "/machine", "/composting"],
+  },
   { label: "Management", hrefs: ["/accounts", "/reports"] },
 ];
 
@@ -279,22 +289,42 @@ function groupNavigation(items: NavigationItem[]) {
 export function DashboardSidebar() {
   const { toggleSidebar } = useSidebar();
   const { theme, toggleTheme } = useTheme();
+  const { user, logout } = useAuth();
+  const me = {
+    name: user?.name ?? "",
+    email: user?.email ?? "",
+    initials: (user?.name ?? "")
+      .split(" ")
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join(""),
+  };
+  // Only list pages this role can open.
+  const visibleNavigation = workspaceNavigation.filter(
+    (item) => !user || canAccessPath(user.role, item.href),
+  );
 
   return (
     <Sidebar
       collapsible="icon"
-className="m-3 h-[calc(110.8svh-1.3rem)] group-data-[collapsible=icon]:m-3 group-data-[collapsible=icon]:h-[calc(110.8svh-1.3rem)] rounded-xl border border-border/50 shadow-md bg-sidebar transition-all duration-300"
+      // Added m-3, rounded-xl, border, shadow, and dynamic height calculation
+      className="m-3 h-[calc(110.7svh-1.3rem)] group-data-[collapsible=icon]:m-3 group-data-[collapsible=icon]:h-[calc(110.7svh-1.3rem)] rounded-xl border border-border/50 shadow-md bg-sidebar transition-all duration-300"
     >
       <SidebarHeader className="h-16 flex-row items-center rounded-xl justify-between px-3 transition-[padding] ease-linear group-data-[collapsible=icon]:px-4.25">
         <div className="flex min-w-0 items-center gap-2 overflow-hidden group-data-[collapsible=icon]:hidden">
           <img
             src={theme === "dark" ? LogoWhite : Logo}
             alt="Hair2Harvest logo"
+            // Added w-8 h-8 (32px by 32px)
             className="w-8 h-8 object-contain shrink-0 transition-all duration-300"
           />
           <div className="ml-2.75 leading-tight whitespace-nowrap overflow-hidden">
-            <span className="truncate text-xl text-sidebar-primary font-bold">Hair2Harvest</span>
-            <p className="text-[11px] text-muted-foreground">Admin workspace</p>
+            <span className="truncate text-xl text-sidebar-primary font-bold">
+              Hair2Harvest
+            </span>
+            <p className="text-[11px] text-muted-foreground">
+              {user ? `${ROLE_LABELS[user.role]} workspace` : "Workspace"}
+            </p>
           </div>
         </div>
         <Button
@@ -309,9 +339,10 @@ className="m-3 h-[calc(110.8svh-1.3rem)] group-data-[collapsible=icon]:m-3 group
       </SidebarHeader>
 
       <SidebarContent className="gap-5 overflow-x-hidden px-3 py-4 transition-[padding] ease-linear group-data-[collapsible=icon]:px-4.25">
-        {groupNavigation(workspaceNavigation).map((section, index) => (
+        {groupNavigation(visibleNavigation).map((section, index) => (
           <div key={section.label || "other"} className="flex flex-col gap-2">
             {index > 0 ? (
+              // Icon-only sidebar has no headings, so a short divider separates the groups.
               <div className="mx-auto hidden h-px w-6 bg-border group-data-[collapsible=icon]:block" />
             ) : null}
             {section.label ? (
@@ -346,18 +377,14 @@ className="m-3 h-[calc(110.8svh-1.3rem)] group-data-[collapsible=icon]:m-3 group
                 aria-label="Account menu"
               >
                 <Avatar className="size-10 after:border-[0.15625rem]">
-                  <AvatarImage
-                    src={currentUser.avatar}
-                    alt={currentUser.name}
-                  />
-                  <AvatarFallback>{currentUser.initials}</AvatarFallback>
+                  <AvatarFallback>{me.initials}</AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1 text-left group-data-[collapsible=icon]:hidden">
                   <p className="truncate text-base text-sidebar-primary font-semibold">
-                    {currentUser.name}
+                    {me.name}
                   </p>
                   <p className="truncate text-sm text-muted-foreground">
-                    {currentUser.email}
+                    {me.email}
                   </p>
                 </div>
               </DropdownMenuTrigger>
@@ -369,12 +396,8 @@ className="m-3 h-[calc(110.8svh-1.3rem)] group-data-[collapsible=icon]:m-3 group
               >
                 <DropdownMenuGroup>
                   <DropdownMenuLabel className="font-normal">
-                    <p className="font-medium text-foreground">
-                      {currentUser.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {currentUser.email}
-                    </p>
+                    <p className="font-medium text-foreground">{me.name}</p>
+                    <p className="text-xs text-muted-foreground">{me.email}</p>
                   </DropdownMenuLabel>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
@@ -382,16 +405,19 @@ className="m-3 h-[calc(110.8svh-1.3rem)] group-data-[collapsible=icon]:m-3 group
                   <User />
                   Profile Settings
                 </DropdownMenuItem>
-                <DropdownMenuItem>
+                {/* <DropdownMenuItem>
                   <Settings />
                   Account Settings
-                </DropdownMenuItem>
+                </DropdownMenuItem> */}
                 {/* <DropdownMenuItem onClick={toggleTheme}>
                   {theme === "dark" ? <Sun /> : <Moon />}
-                  {theme === "dark" ? "Light mode" : "Dark mode"} */}
-                {/* </DropdownMenuItem> */}
+                  {theme === "dark" ? "Light mode" : "Dark mode"}
+                </DropdownMenuItem> */}
                 <DropdownMenuSeparator />
-                <DropdownMenuItem variant="destructive">
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={() => void logout()}
+                >
                   <LogOut />
                   Log out
                 </DropdownMenuItem>

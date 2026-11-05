@@ -1,23 +1,77 @@
-// features/auth/components/verify-otp-page.tsx
-import { useState } from "react";
+// features/auth/pages/verify-otp-page.tsx
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { useNavigate, useLocation, Link } from "react-router";
+import { useNavigate, useLocation, Link, Navigate } from "react-router";
 import Logo from "../../../assets/hair2harvest-logo.svg";
+import { errorMessage } from "@/lib/api";
+import { authApi } from "../auth-api";
+import type { OtpPurpose } from "../auth-api";
+import { useAuth } from "../context/auth-context";
+
+const RESEND_SECONDS = 60;
+
+type LocationState = {
+  email?: string;
+  purpose?: OtpPurpose; // "login" for admin/staff sign-in, "reset" for a password reset
+  rememberMe?: boolean;
+} | null;
 
 const VerifyOtpPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const email = location.state?.email || "your email";
+  const { verifyLoginOtp } = useAuth();
+
+  const state = location.state as LocationState;
+  const email = state?.email ?? "";
+  const purpose = state?.purpose;
+  const rememberMe = state?.rememberMe ?? false;
 
   const [otp, setOtp] = useState("");
+  const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [cooldown, setCooldown] = useState(RESEND_SECONDS);
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setTimeout(() => setCooldown((seconds) => seconds - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldown]);
+
+  // Opened directly (no email in the navigation state): start over.
+  if (!email || !purpose) return <Navigate to="/login" replace />;
+
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    console.log("Verifying OTP:", otp);
+    if (otp.length !== 6) return setError("Enter the 6-digit code.");
 
-    // Simulate successful OTP verification
-    // In a real app, you would call your backend here, then route to a "New Password" page.
-    navigate("/reset-password", { state: { email, otp } });
+    setError("");
+    setInfo("");
+    setBusy(true);
+    try {
+      if (purpose === "login") {
+        await verifyLoginOtp(email, otp, rememberMe); // sets the session
+        navigate("/dashboard", { replace: true });
+      } else {
+        const { resetToken } = await authApi.verifyResetOtp(email, otp);
+        navigate("/reset-password", { state: { email, resetToken } });
+      }
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setError("");
+    try {
+      await authApi.resendOtp(email, purpose);
+      setInfo("A new code is on its way.");
+      setCooldown(RESEND_SECONDS);
+    } catch (err) {
+      setError(errorMessage(err));
+    }
   };
 
   return (
@@ -50,29 +104,53 @@ const VerifyOtpPage = () => {
               type="text"
               id="otp"
               name="otp"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              autoFocus
               placeholder="000000"
               maxLength={6}
               value={otp}
-              onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))} // Only allow numbers
+              onChange={(e) => {
+                setOtp(e.target.value.replace(/\D/g, "")); // Only allow numbers
+                if (error) setError("");
+              }}
               required
               className="w-full px-4 py-[11px] text-lg text-center tracking-[0.5em] text-[#41431B] bg-white border-2 border-[#E3DBBB] rounded-lg outline-none transition-all duration-300 focus:border-[#AEB784] focus:ring-1 focus:ring-[#AEB784] placeholder:text-gray-300 placeholder:tracking-normal"
             />
           </div>
 
+          {/* Info and error messages */}
+          {info && (
+            <div className="mb-4 p-3 bg-[#F5FFDB] border border-[#E3DBBB] rounded-lg">
+              <p className="text-[12px] text-[#41431B] text-center">{info}</p>
+            </div>
+          )}
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-[12px] text-red-600 text-center">{error}</p>
+            </div>
+          )}
+
           <button
             type="submit"
-            className="w-full py-[13px] text-[15px] font-semibold text-[#F8F3E1] bg-[#41431B] rounded-lg transition-all duration-300 hover:bg-[#2a2b12] hover:shadow-lg active:scale-[0.98]"
+            disabled={busy}
+            className="w-full py-[13px] text-[15px] font-semibold text-[#F8F3E1] bg-[#41431B] rounded-lg transition-all duration-300 hover:bg-[#2a2b12] hover:shadow-lg active:scale-[0.98] disabled:opacity-70"
           >
-            Verify Code
+            {busy
+              ? "Verifying..."
+              : purpose === "login"
+                ? "Verify and Sign In"
+                : "Verify Code"}
           </button>
 
           <div className="flex justify-between items-center mt-5 text-[13px]">
             <button
               type="button"
-              onClick={() => navigate("/forgot-password")}
-              className="font-medium text-[#AEB784] transition-colors duration-300 hover:text-[#41431B]"
+              onClick={handleResend}
+              disabled={cooldown > 0}
+              className="font-medium text-[#AEB784] transition-colors duration-300 hover:text-[#41431B] disabled:opacity-60 disabled:hover:text-[#AEB784]"
             >
-              Resend code
+              {cooldown > 0 ? `Resend code in ${cooldown}s` : "Resend code"}
             </button>
             <Link
               to="/login"

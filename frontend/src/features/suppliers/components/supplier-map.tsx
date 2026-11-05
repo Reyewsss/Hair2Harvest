@@ -9,7 +9,7 @@ import { StatusBadge } from "./supplier-shared";
 // Colored pin built from a tiny SVG so we don't need the default marker PNGs.
 const makePinIcon = (enrolled: boolean, focused: boolean) =>
   L.divIcon({
-    className: "", // strip leaflet's default styles
+    className: "",
     html: `
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
         width="${focused ? 34 : 28}" height="${focused ? 34 : 28}"
@@ -24,15 +24,42 @@ const makePinIcon = (enrolled: boolean, focused: boolean) =>
     iconAnchor: [focused ? 17 : 14, focused ? 34 : 28],
   });
 
-// Auto-fits the viewport to all pins whenever the set of pinned shops changes.
-// IMPORTANT: fitBounds must run inside useEffect, not during render.
+// Auto-fits the viewport and handles re-measuring for animated layouts.
 function FitToPins({ bounds }: { bounds: L.LatLngBoundsExpression | null }) {
   const map = useMap();
+
+  // 1. Force a re-measure after mount (handles sidebar transition settling)
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      map.invalidateSize();
+    });
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+      if (bounds) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+    }, 350);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(timer);
+    };
+  }, [map]); // Omit bounds intentionally; handled in the effect below
+
+  // 2. Re-measure on any container resize
+  useEffect(() => {
+    const container = map.getContainer();
+    const ro = new ResizeObserver(() => map.invalidateSize());
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [map]);
+
+  // 3. Fit bounds whenever the filtered pins change
   useEffect(() => {
     if (bounds) {
+      map.invalidateSize();
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
     }
   }, [bounds, map]);
+
   return null;
 }
 
@@ -40,7 +67,10 @@ export function SupplierPinMap({ suppliers }: { suppliers: Supplier[] }) {
   const [focusId, setFocusId] = useState<string | null>(null);
 
   const pinned = useMemo(() => suppliers.filter(hasPin), [suppliers]);
-  const unpinned = useMemo(() => suppliers.filter((s) => !hasPin(s)), [suppliers]);
+  const unpinned = useMemo(
+    () => suppliers.filter((s) => !hasPin(s)),
+    [suppliers],
+  );
   const focus = pinned.find((s) => s.id === focusId) ?? null;
 
   const bounds = useMemo<L.LatLngBoundsExpression | null>(
@@ -59,7 +89,6 @@ export function SupplierPinMap({ suppliers }: { suppliers: Supplier[] }) {
     );
   }
 
-  // Center falls back to the first pin; FitToPins overrides it on mount.
   const center: [number, number] = [pinned[0].lat!, pinned[0].lng!];
 
   return (
@@ -79,7 +108,7 @@ export function SupplierPinMap({ suppliers }: { suppliers: Supplier[] }) {
           center={center}
           zoom={13}
           scrollWheelZoom
-          style={{ height: "100%", width: "100%" }}
+          style={{ height: "100%", width: "100%", zIndex: 0 }}
         >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -104,12 +133,14 @@ export function SupplierPinMap({ suppliers }: { suppliers: Supplier[] }) {
           ))}
         </MapContainer>
 
-        {/* Focus card (kept identical to the original UI) */}
+        {/* Focus card */}
         {focus ? (
           <div className="absolute right-3 bottom-3 left-3 z-[1000] flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-3 shadow-md sm:right-auto sm:w-80">
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{focus.shopName}</p>
-              <p className="truncate text-xs text-muted-foreground">{focus.barangay}</p>
+              <p className="truncate text-xs text-muted-foreground">
+                {focus.barangay}
+              </p>
             </div>
             <StatusBadge status={focus.status} />
             <SupplierLink
@@ -124,7 +155,8 @@ export function SupplierPinMap({ suppliers }: { suppliers: Supplier[] }) {
 
       {unpinned.length > 0 ? (
         <p className="text-xs text-muted-foreground">
-          No map pin yet: {unpinned.map((s) => s.shopName).join(", ")}. Add one from Edit Details.
+          No map pin yet: {unpinned.map((s) => s.shopName).join(", ")}. Add one
+          from Edit Details.
         </p>
       ) : null}
     </div>
@@ -132,8 +164,18 @@ export function SupplierPinMap({ suppliers }: { suppliers: Supplier[] }) {
 }
 
 // Single-shop map for the profile page: an OpenStreetMap embed centred on the saved pin.
-// It needs an internet connection but no API key or library.
-export function ShopMapEmbed({ lat, lng, title }: { lat: number; lng: number; title: string }) {
+// Renamed to ShopMap to match the import in supplier-profile-page.tsx.
+export function ShopMap({
+  lat,
+  lng,
+  title,
+  status,
+}: {
+  lat: number;
+  lng: number;
+  title: string;
+  status?: "enrolled" | "candidate";
+}) {
   const dLat = 0.003;
   const dLng = 0.004;
   const src = `https://www.openstreetmap.org/export/embed.html?bbox=${lng - dLng}%2C${lat - dLat}%2C${lng + dLng}%2C${lat + dLat}&layer=mapnik&marker=${lat}%2C${lng}`;
