@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   BadgeCheck,
   Calendar,
@@ -8,11 +8,14 @@ import {
   Download,
   FlaskConical,
   Layers,
+  Search,
+  Shield,
   TrendingUp,
   Truck,
   Users,
   type LucideIcon,
 } from "lucide-react";
+import { toast } from "sonner";
 import { DashboardLink } from "../dashboard-shell/components/navigation.tsx";
 import { Button, buttonVariants } from "@/shared/ui/button.tsx";
 import {
@@ -31,6 +34,11 @@ import {
   TableRow,
 } from "@/shared/ui/table.tsx";
 import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/shared/ui/input-group.tsx";
+import {
   batchTemperature,
   dateRangeOptions,
   metricsByRange,
@@ -45,11 +53,14 @@ import {
   type Role,
   type StreamTable,
 } from "./data/overview-data.tsx";
+import { auditApi, type AuditEntry } from "@/features/audit/audit-api";
+import { useAuth } from "@/features/auth/context/auth-context"; // 👈 NEW
 
-// `role` should come from the logged-in user.
 export function DashboardContent({ role = "admin" }: { role?: Role }) {
+  const { user } = useAuth(); // 👈 NEW
+  const effectiveRole = (user?.role ?? role) as Role; // 👈 NEW: use real role
   const [dateRange, setDateRange] = useState<DateRange>("last-7-days");
-  const config = roleConfig[role];
+  const config = roleConfig[effectiveRole];
 
   const charts: ChartSeries[] = config.charts.map((id) =>
     id === "volume" ? volumeByRange[dateRange] : batchTemperature,
@@ -65,6 +76,8 @@ export function DashboardContent({ role = "admin" }: { role?: Role }) {
       />
       <TrendsSection charts={charts} />
       <StreamSection table={streamTables[config.table]} />
+      {/* 👇 Audit trail only for admins */}
+      {effectiveRole === "admin" ? <AuditSection /> : null}
     </div>
   );
 }
@@ -93,7 +106,6 @@ function OverviewSection({
             {roleLabel} view of suppliers, pickups, batches and lab activity.
           </p>
         </div>
-
         <div className="flex items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -250,7 +262,6 @@ function TrendsSection({ charts }: { charts: ChartSeries[] }) {
   );
 }
 
-// Dependency-free chart. Bars and points share one column grid, so x labels always line up.
 function TrendCard({ chart }: { chart: ChartSeries }) {
   const { data, yMin, yMax, ticks, band, type, unit } = chart;
   const n = data.length;
@@ -498,5 +509,213 @@ function StreamRow({
         }
       })}
     </TableRow>
+  );
+}
+
+/* ---------- Audit Trail Section ---------- */
+
+const actionTone: Record<string, string> = {
+  create: "bg-success/10 text-success",
+  update: "bg-primary/10 text-primary",
+  delete: "bg-destructive/10 text-destructive",
+  login: "bg-secondary text-secondary-foreground",
+  approve: "bg-success/10 text-success",
+  reject: "bg-destructive/10 text-destructive",
+  command: "bg-primary/10 text-primary",
+  "login-failed": "bg-destructive/10 text-destructive",
+  "login-otp-sent": "bg-secondary text-secondary-foreground",
+  "otp-failed": "bg-destructive/10 text-destructive",
+  "otp-resent": "bg-secondary text-secondary-foreground",
+  "password-reset": "bg-primary/10 text-primary",
+  "password-reset-requested": "bg-secondary text-secondary-foreground",
+  logout: "bg-secondary text-secondary-foreground",
+};
+
+const AUDIT_MODULES = [
+  "all",
+  "auth",
+  "accounts",
+  "suppliers",
+  "pickups",
+  "batches",
+  "machines",
+  "thresholds",
+];
+
+function AuditSection() {
+  const [entries, setEntries] = useState<AuditEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [module, setModule] = useState("all");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await auditApi.list({
+        search: search.trim() || undefined,
+        module: module !== "all" ? module : undefined,
+        from: from || undefined,
+        to: to || undefined,
+        limit: 100,
+      });
+      setEntries(res.entries);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Failed to load audit trail");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+  }, [search, module, from, to]);
+
+  return (
+    <section className="flex flex-col gap-5">
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div className="space-y-2">
+          <h2 className="flex items-center gap-2 text-lg font-medium">
+            <Shield className="size-5 text-primary" />
+            Audit Trail
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Immutable record of every action. Entries cannot be edited or
+            deleted.
+          </p>
+        </div>
+        <Button
+          type="button"
+          className="h-10 gap-1 px-3.5"
+          onClick={() => {
+            auditApi.exportCsv();
+            toast.success("Audit trail exported");
+          }}
+        >
+          <Download className="size-4" />
+          Export CSV
+        </Button>
+      </div>
+
+      <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
+        <InputGroup className="h-11 w-full border-none bg-secondary px-3 py-1 md:max-w-sm">
+          <InputGroupAddon className="pl-0">
+            <Search className="size-3.5 text-input-addon-foreground" />
+          </InputGroupAddon>
+          <InputGroupInput
+            className="h-full p-0 px-1.5!"
+            aria-label="Search audit"
+            placeholder="Search by user, item, or remarks..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </InputGroup>
+
+        <select
+          value={module}
+          onChange={(e) => setModule(e.target.value)}
+          className="h-11 rounded-lg bg-secondary px-3 text-sm outline-none"
+        >
+          {AUDIT_MODULES.map((m) => (
+            <option key={m} value={m}>
+              {m === "all" ? "All modules" : m}
+            </option>
+          ))}
+        </select>
+
+        <input
+          type="date"
+          value={from}
+          onChange={(e) => setFrom(e.target.value)}
+          className="h-11 rounded-lg bg-secondary px-3 text-sm outline-none"
+          title="From date"
+        />
+        <input
+          type="date"
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+          className="h-11 rounded-lg bg-secondary px-3 text-sm outline-none"
+          title="To date"
+        />
+      </div>
+
+      <div className="rounded-xl border bg-card">
+        <Table className="min-w-215">
+          <colgroup>
+            <col className="w-[14%]" />
+            <col className="w-[14%]" />
+            <col className="w-[10%]" />
+            <col className="w-[10%]" />
+            <col className="w-[26%]" />
+            <col className="w-[26%]" />
+          </colgroup>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Time</TableHead>
+              <TableHead>User</TableHead>
+              <TableHead>Module</TableHead>
+              <TableHead>Action</TableHead>
+              <TableHead>Item</TableHead>
+              <TableHead>Remarks</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell
+                  colSpan={6}
+                  className="py-10 text-center text-muted-foreground"
+                >
+                  Loading audit trail...
+                </TableCell>
+              </TableRow>
+            ) : entries.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={6}
+                  className="py-10 text-center text-muted-foreground"
+                >
+                  No audit entries match your filters.
+                </TableCell>
+              </TableRow>
+            ) : (
+              entries.map((entry) => (
+                <TableRow key={entry._id}>
+                  <TableCell className="text-muted-foreground tabular-nums">
+                    {new Date(entry.createdAt).toLocaleString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </TableCell>
+                  <TableCell className="font-medium">{entry.user}</TableCell>
+                  <TableCell className="capitalize text-muted-foreground">
+                    {entry.module}
+                  </TableCell>
+                  <TableCell>
+                    <span
+                      className={`inline-flex rounded-xl px-2 py-0.5 text-xs font-medium capitalize ${
+                        actionTone[entry.action] ??
+                        "bg-secondary text-secondary-foreground"
+                      }`}
+                    >
+                      {entry.action}
+                    </span>
+                  </TableCell>
+                  <TableCell className="whitespace-normal">
+                    {entry.item}
+                  </TableCell>
+                  <TableCell className="whitespace-normal text-muted-foreground">
+                    {entry.remarks || "—"}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </section>
   );
 }

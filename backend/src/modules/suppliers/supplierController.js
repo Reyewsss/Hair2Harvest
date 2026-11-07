@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import Supplier from "./supplierModel.js";
+import { recordAudit } from "../audit/auditController.js";
 
 const TARGET_BARANGAY = "Novaliches Proper"; // change to your actual barangay
 
@@ -82,7 +83,6 @@ export async function createSupplier(req, res) {
 
     const last = await Supplier.findOne().sort({ code: -1 }).select("code");
     const nextNumber = last ? Number(last.code.split("-")[1]) + 1 : 1;
-
     const hasFile = !!req.file;
 
     const supplier = await Supplier.create({
@@ -94,12 +94,25 @@ export async function createSupplier(req, res) {
       email,
       barangay: TARGET_BARANGAY,
       address,
-      operatingHours: JSON.parse(operatingHours || '{"days":"Mon-Sat","open":"09:00","close":"18:00"}'),
+      operatingHours: JSON.parse(
+        operatingHours || '{"days":"Mon-Sat","open":"09:00","close":"18:00"}',
+      ),
       pickupFrequency,
       weeklyVolumeKg: Number(weeklyVolumeKg) || 0,
       consentDocument: hasFile ? req.file.path : undefined,
       hasConsent: hasFile,
       status: hasFile ? "approved" : "pending",
+    });
+
+    await recordAudit({
+      req,
+      action: "create",
+      module: "suppliers",
+      item: `${supplier.shopName} (${supplier.code})`,
+      itemId: supplier._id.toString(),
+      remarks: hasFile
+        ? "Registered with consent document (enrolled)"
+        : "Registered without document (candidate)",
     });
 
     res.status(201).json({ success: true, supplier });
@@ -130,18 +143,36 @@ export async function updateSupplier(req, res) {
       return res.status(404).json({ success: false, message: "Supplier not found" });
     }
 
-    // Ensure operatingHours is handled correctly if sent as a string
     if (typeof patch.operatingHours === "string") {
       try {
         patch.operatingHours = JSON.parse(patch.operatingHours);
-      } catch (e) {
+      } catch {
         delete patch.operatingHours;
       }
+    }
+
+    // Snapshot before mutation so we can report exactly what changed
+    const changed = [];
+    for (const key of Object.keys(patch)) {
+      const before = JSON.stringify(supplier[key]);
+      const after = JSON.stringify(patch[key]);
+      if (before !== after) changed.push(key);
     }
 
     Object.assign(supplier, patch);
     supplier.barangay = TARGET_BARANGAY;
     await supplier.save();
+
+    await recordAudit({
+      req,
+      action: "update",
+      module: "suppliers",
+      item: `${supplier.shopName} (${supplier.code})`,
+      itemId: supplier._id.toString(),
+      remarks: changed.length
+        ? `Changed: ${changed.join(", ")}`
+        : "Saved without field changes",
+    });
 
     res.status(200).json({ success: true, supplier });
   } catch (error) {
@@ -175,8 +206,19 @@ export async function reviewSupplier(req, res) {
     supplier.status = status;
     supplier.remarks = remarks?.trim();
     supplier.reviewedAt = new Date();
-    supplier.reviewedBy = req.userId;
+    supplier.reviewedBy = req.userId ?? req.user?._id;
     await supplier.save();
+
+    await recordAudit({
+      req,
+      action: status === "approved" ? "approve" : "reject",
+      module: "suppliers",
+      item: `${supplier.shopName} (${supplier.code})`,
+      itemId: supplier._id.toString(),
+      remarks:
+        remarks?.trim() ||
+        (status === "approved" ? "Approved" : "Rejected"),
+    });
 
     res.status(200).json({ success: true, supplier });
   } catch (error) {
@@ -185,7 +227,6 @@ export async function reviewSupplier(req, res) {
   }
 }
 
-// 👇 NEW: Delete supplier
 export async function deleteSupplier(req, res) {
   try {
     const supplier = await findSupplier(req.params.id);
@@ -193,13 +234,28 @@ export async function deleteSupplier(req, res) {
       return res.status(404).json({ success: false, message: "Supplier not found" });
     }
 
-    // Optionally delete the uploaded file from disk
+    const snapshot = {
+      shopName: supplier.shopName,
+      code: supplier.code,
+      id: supplier._id.toString(),
+    };
+
     if (supplier.consentDocument) {
       const fs = await import("fs");
-      fs.unlink(supplier.consentDocument, () => {}); 
+      fs.unlink(supplier.consentDocument, () => {});
     }
 
     await Supplier.deleteOne({ _id: supplier._id });
+
+    await recordAudit({
+      req,
+      action: "delete",
+      module: "suppliers",
+      item: `${snapshot.shopName} (${snapshot.code})`,
+      itemId: snapshot.id,
+      remarks: "Supplier removed",
+    });
+
     res.status(200).json({ success: true, message: "Supplier deleted" });
   } catch (error) {
     console.error("Error deleting supplier:", error);
