@@ -598,7 +598,8 @@ function AuditSection() {
         </Button>
       </div>
 
-      <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
+      <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center md:justify-between">
+        {/* 👈 Left: search */}
         <InputGroup className="h-11 w-full border-none bg-secondary px-3 py-1 md:max-w-sm">
           <InputGroupAddon className="pl-0">
             <Search className="size-3.5 text-input-addon-foreground" />
@@ -612,32 +613,35 @@ function AuditSection() {
           />
         </InputGroup>
 
-        <select
-          value={module}
-          onChange={(e) => setModule(e.target.value)}
-          className="h-11 rounded-lg bg-secondary px-3 text-sm outline-none"
-        >
-          {AUDIT_MODULES.map((m) => (
-            <option key={m} value={m}>
-              {m === "all" ? "All modules" : m}
-            </option>
-          ))}
-        </select>
+        {/* 👈 Right: filters grouped together */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <select
+            value={module}
+            onChange={(e) => setModule(e.target.value)}
+            className="h-11 rounded-lg bg-secondary px-3 text-sm outline-none"
+          >
+            {AUDIT_MODULES.map((m) => (
+              <option key={m} value={m}>
+                {m === "all" ? "All modules" : m}
+              </option>
+            ))}
+          </select>
 
-        <input
-          type="date"
-          value={from}
-          onChange={(e) => setFrom(e.target.value)}
-          className="h-11 rounded-lg bg-secondary px-3 text-sm outline-none"
-          title="From date"
-        />
-        <input
-          type="date"
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
-          className="h-11 rounded-lg bg-secondary px-3 text-sm outline-none"
-          title="To date"
-        />
+          <input
+            type="date"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            className="h-11 rounded-lg bg-secondary px-3 text-sm outline-none"
+            title="From date"
+          />
+          <input
+            type="date"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            className="h-11 rounded-lg bg-secondary px-3 text-sm outline-none"
+            title="To date"
+          />
+        </div>
       </div>
 
       <div className="rounded-xl border bg-card">
