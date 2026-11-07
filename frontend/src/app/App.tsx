@@ -10,10 +10,12 @@ import {
   ProtectedRoute,
   PublicOnlyRoute,
 } from "@/features/auth/routes/route-guards";
+import { ModalHost } from "@/shared/ui/modal.tsx";
 
 const App = () => {
   return (
     <AuthProvider>
+      <ModalHost />
       <Routes>
         <Route element={<PublicOnlyRoute />}>
           <Route path="/" element={<Navigate to="/login" replace />} />

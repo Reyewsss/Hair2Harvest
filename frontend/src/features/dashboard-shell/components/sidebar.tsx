@@ -43,6 +43,7 @@ import {
   reportLinks,
 } from "@/features/reports/data/reports-nav";
 import { cn } from "@/lib/utils";
+import { confirm } from "@/shared/ui/modal";
 
 const dropdownTriggerClassName =
   "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm ring-sidebar-ring outline-hidden transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0";
@@ -416,7 +417,17 @@ export function DashboardSidebar() {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   variant="destructive"
-                  onClick={() => void logout()}
+                  onClick={() => {
+                    confirm({
+                      title: "Sign out?",
+                      description:
+                        "You'll need to sign in again to access your workspace.",
+                      confirmLabel: "Confirm",
+                      cancelLabel: "Cancel",
+                      variant: "destructive",
+                      onConfirm: () => void logout(),
+                    });
+                  }}
                 >
                   <LogOut />
                   Log out

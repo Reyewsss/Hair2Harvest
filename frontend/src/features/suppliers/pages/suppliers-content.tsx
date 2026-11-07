@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { FileText, Plus, Search, Trash2 } from "lucide-react"; // 👈 Added Trash2
+import { FileText, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/shared/ui/button";
 import {
@@ -33,6 +33,7 @@ import {
   SegmentedTabs,
   StatusBadge,
 } from "../components/supplier-shared";
+import { confirm } from "@/shared/ui/modal"; // 👈 Import the global modal
 
 type StatusFilter = "all" | SupplierStatus;
 type FrequencyFilter = "all" | PickupFrequency;
@@ -44,7 +45,6 @@ const viewOptions: { value: View; label: string }[] = [
 ];
 
 export function SuppliersContent() {
-  // 👈 Added deleteSupplier
   const { suppliers, addSupplier, deleteSupplier, loading } = useSuppliers();
   const canEdit = useCan("suppliers:edit");
   const [search, setSearch] = useState("");
@@ -61,7 +61,8 @@ export function SuppliersContent() {
         (frequency === "all" || s.frequency === frequency) &&
         (query === "" ||
           s.shopName.toLowerCase().includes(query) ||
-          s.ownerName.toLowerCase().includes(query)),
+          s.ownerName.toLowerCase().includes(query) ||
+          (s.address && s.address.toLowerCase().includes(query))), // 👈 Added address to search
     );
   }, [suppliers, search, status, frequency]);
 
@@ -75,15 +76,22 @@ export function SuppliersContent() {
     }
   };
 
-  // 👈 Added handleDelete
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
-    try {
-      await deleteSupplier(id);
-      toast.success(`${name} was removed.`);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to delete supplier.");
-    }
+  const handleDelete = (id: string, name: string) => {
+    confirm({
+      title: `Delete "${name}"?`,
+      description:
+        "This will permanently remove the supplier and their uploaded document.",
+      confirmLabel: "Delete",
+      variant: "destructive",
+      onConfirm: async () => {
+        try {
+          await deleteSupplier(id);
+          toast.success(`${name} was removed.`);
+        } catch (error: any) {
+          toast.error(error.message || "Failed to delete supplier.");
+        }
+      },
+    });
   };
 
   if (loading)
@@ -97,7 +105,7 @@ export function SuppliersContent() {
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 pt-8 pb-10 md:px-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div className="space-y-2">
-          <h1 className="text-2xl font-semibold">Suppliers</h1>
+          <h1 className="text-2xl font-semibold">Contributor</h1>
           <p className="text-lg text-muted-foreground">
             Partner shops that give hair, and the candidates we are signing up
           </p>
@@ -123,7 +131,7 @@ export function SuppliersContent() {
             <InputGroupInput
               className="h-full p-0 px-1.5!"
               aria-label="Search shops"
-              placeholder="Search by shop name or owner..."
+              placeholder="Search by shop, owner, or address..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -160,33 +168,33 @@ export function SuppliersContent() {
         ) : (
           <Table className="min-w-215">
             <colgroup>
-              {/* 👈 Adjusted widths to fit the new Action column */}
+              {/* 👈 Adjusted widths: Address gets more space */}
               <col className="w-[18%]" />
               <col className="w-[14%]" />
-              <col className="w-[10%]" />
-              <col className="w-[15%]" />
-              <col className="w-[12%]" />
-              <col className="w-[12%]" />
-              <col className="w-[9%]" />
+              <col className="w-[18%]" />
+              <col className="w-[13%]" />
+              <col className="w-[11%]" />
+              <col className="w-[8%]" />
+              <col className="w-[8%]" />
               <col className="w-[10%]" />
             </colgroup>
             <TableHeader>
               <TableRow>
                 <TableHead>Shop</TableHead>
                 <TableHead>Owner</TableHead>
-                <TableHead>Barangay</TableHead>
+                <TableHead>Address</TableHead> {/* 👈 Changed from Barangay */}
                 <TableHead>Pickup schedule</TableHead>
                 <TableHead>Contact</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>File</TableHead>
-                <TableHead>Actions</TableHead> {/* 👈 Added */}
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={8} // 👈 Changed to 8
+                    colSpan={8}
                     className="py-10 text-center text-muted-foreground"
                   >
                     No shops match your search or filters.
@@ -207,7 +215,10 @@ export function SuppliersContent() {
                       </p>
                     </TableCell>
                     <TableCell>{s.ownerName}</TableCell>
-                    <TableCell>{s.barangay}</TableCell>
+                    <TableCell className="whitespace-normal">
+                      {/* 👈 Changed from Barangay to Address */}
+                      <span className="line-clamp-2">{s.address || "—"}</span>
+                    </TableCell>
                     <TableCell className="whitespace-normal">
                       <p>{frequencyLabel(s.frequency)}</p>
                       <p className="text-xs text-muted-foreground">
@@ -237,7 +248,6 @@ export function SuppliersContent() {
                         </span>
                       )}
                     </TableCell>
-                    {/* 👈 Added Delete button */}
                     <TableCell>
                       {canEdit ? (
                         <button

@@ -409,7 +409,7 @@ export const workspaceNavigation: NavigationItem[] = [
     badge: String(classificationQueue.length),
   },
   { name: "Inventory", href: "/inventory", icon: FolderDot },
-  { name: "Suppliers", href: "/suppliers", icon: Store },
+  { name: "Contributor", href: "/suppliers", icon: Store },
   { name: "Machine", href: "/machine", icon: Bot },
   { name: "Composting", href: "/composting", icon: Leaf },
   { name: "Reports", href: "/reports", icon: FileChartLine },
