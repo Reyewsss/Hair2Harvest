@@ -64,7 +64,6 @@ export const suppliersApi = {
       pickupFrequency: formData.get("pickupFrequency"),
       weeklyVolumeKg: Number(formData.get("weeklyVolumeKg")) || 0,
       operatingHours: JSON.parse(String(formData.get("operatingHours") || "{}")),
-      // 👇 Forward the pin fields so the backend can honor manual adjustments
       lat: formData.get("lat"),
       lng: formData.get("lng"),
       pinManuallySet: formData.get("pinManuallySet"),
@@ -87,15 +86,21 @@ export const suppliersApi = {
     );
     return res;
   },
+
   getPickupHistory: async (supplierId: string) => {
     const res = await api<{ pickups: any[] }>(`/suppliers/pickups/supplier/${supplierId}`);
     return res.pickups;
   },
-  };
+};
 
-  // Add to your existing suppliersApi object
 export const pickupsApi = {
-  schedule: async (data: { supplierId: string; date: string; time: string; frequency: string }) => {
+  schedule: async (data: { 
+    supplierId: string; 
+    date: string; 
+    time: string; 
+    frequency: string;
+    assignedTo?: string; // 👈 NEW
+  }) => {
     const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5001/api";
     const res = await fetch(`${BASE}/suppliers/pickups`, {
       method: "POST",
@@ -127,13 +132,7 @@ export const pickupsApi = {
     if (!res.ok) throw new Error((await res.json()).message || "Failed to update status");
     return res.json();
   },
-  // Add this inside the `suppliersApi` object in suppliers-api.ts
-  getPickupHistory: async (supplierId: string) => {
-    const res = await api<{ pickups: any[] }>(`/suppliers/pickups/supplier/${supplierId}`);
-    return res.pickups;
-  },
 
-  // Add this inside your pickupsApi object
   getOldSchedule: async (date: string, scope: "active" | "past" = "active") => {
     const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5001/api";
     const res = await fetch(`${BASE}/suppliers/pickups?date=${date}&scope=${scope}`, {
@@ -141,5 +140,16 @@ export const pickupsApi = {
     });
     if (!res.ok) throw new Error("Failed to load schedule");
     return res.json();
+  },
+};
+
+// 👇 NEW: Fetch staff list for assignment
+export const staffApi = {
+  list: async () => {
+    const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5001/api";
+    const res = await fetch(`${BASE}/accounts/staff`, { credentials: "include" });
+    if (!res.ok) throw new Error("Failed to load staff");
+    const data = await res.json();
+    return data.staff;
   },
 };

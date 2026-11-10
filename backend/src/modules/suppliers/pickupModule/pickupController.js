@@ -7,7 +7,7 @@ import { sendSms } from "../utils/sms.js";
 /* ─── SCHEDULE A PICKUP ──────────────────────────────────────────────── */
 export async function schedulePickup(req, res) {
   try {
-    const { supplierId, date, time, frequency } = req.body;
+    const { supplierId, date, time, frequency, assignedTo } = req.body;
 
     if (!supplierId || !date || !time) {
       return res.status(400).json({ message: "supplierId, date, and time are required" });
@@ -27,6 +27,7 @@ export async function schedulePickup(req, res) {
       scheduledDate: date,
       scheduledTime: time,
       frequency: frequency || "none",
+      assignedTo: assignedTo || undefined, 
       status: "scheduled",
     });
 
@@ -59,12 +60,13 @@ export async function schedulePickup(req, res) {
 /* ─── GET SCHEDULE ───────────────────────────────────────────────────── */
 export async function getSchedule(req, res) {
   try {
-    const { date } = req.query;
-    const filter = { status: { $in: ["scheduled", "collected"] } };
+    const { date, scope } = req.query;
+    let filter = { status: { $in: ["scheduled", "collected"] } };
     if (date) filter.scheduledDate = date;
 
     const pickups = await Pickup.find(filter)
       .populate("supplierId", "shopName owner phone street barangay code")
+         .populate("assignedTo", "name")
       .sort({ scheduledTime: 1 });
 
     res.status(200).json({ pickups });
@@ -174,6 +176,7 @@ export async function getOldSchedule(req, res) {
 
     const pickups = await Pickup.find(filter)
       .populate("supplierId", "shopName owner phone street barangay code")
+      .populate("assignedTo", "name")
       .populate("collectedBy", "name")
       .populate("deliveredBy", "name")
       .sort({ scheduledDate: -1, scheduledTime: -1 }); // Newest first

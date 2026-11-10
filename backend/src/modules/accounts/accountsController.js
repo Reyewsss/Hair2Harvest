@@ -145,3 +145,15 @@ export const deleteAccount = async (req, res) => {
 
   res.json({ message: "Account deleted." });
 };
+
+export const listStaff = async (_req, res) => {
+  try {
+    const users = await User.find({ 
+      role: { $in: [ "staff"] }, 
+      isActive: true 
+    }).sort({ name: 1 });
+    res.json({ staff: users.map((u) => ({ id: u._id, name: u.name, role: u.role })) });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};

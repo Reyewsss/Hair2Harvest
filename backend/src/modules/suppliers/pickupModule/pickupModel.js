@@ -15,6 +15,9 @@ const pickupSchema = new mongoose.Schema(
       enum: ["daily", "twice-weekly", "weekly", "none"],
       default: "none",
     },
+
+    // Add this to the schema definition
+    assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     
     // Lifecycle status
     status: {

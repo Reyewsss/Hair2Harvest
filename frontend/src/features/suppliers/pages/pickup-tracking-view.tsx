@@ -15,18 +15,16 @@ import {
 
 export function PickupTrackingView() {
   const [activePickups, setActivePickups] = useState<any[]>([]);
-  const [deliveredPickups, setDeliveredPickups] = useState<any[]>([]); // 👈 NEW
+  const [deliveredPickups, setDeliveredPickups] = useState<any[]>([]);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
   const loadTracking = () => {
     const today = new Date().toISOString().slice(0,10);
     
-    // Load active
     pickupsApi.getOldSchedule(today, "active").then(res => {
       setActivePickups(res.pickups);
     });
 
-    // Load delivered
     pickupsApi.getOldSchedule(today, "past").then(res => {
       setDeliveredPickups(res.pickups);
     });
@@ -73,6 +71,7 @@ export function PickupTrackingView() {
           <TableHeader>
             <TableRow>
               <TableHead>Shop</TableHead>
+              <TableHead>Assigned Staff</TableHead> {/* 👈 NEW */}
               <TableHead>Address</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Action</TableHead>
@@ -84,6 +83,7 @@ export function PickupTrackingView() {
                 <TableCell className="font-medium">
                   {p.supplierId?.shopName || "Unknown"}
                 </TableCell>
+                <TableCell className="text-muted-foreground">{p.assignedTo?.name || "—"}</TableCell> {/* 👈 NEW */}
                 <TableCell className="text-muted-foreground">
                   {p.supplierId?.street}
                 </TableCell>
@@ -118,7 +118,7 @@ export function PickupTrackingView() {
               </TableRow>
             ))}
             {activePickups.length === 0 && (
-              <TableRow><TableCell colSpan={4} className="text-center py-10 text-muted-foreground">No active pickups for today.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={5} className="text-center py-10 text-muted-foreground">No active pickups for today.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
@@ -134,7 +134,8 @@ export function PickupTrackingView() {
             <TableRow>
               <TableHead>Date</TableHead>
               <TableHead>Shop</TableHead>
-              <TableHead>Collector</TableHead>
+              <TableHead>Assigned Staff</TableHead> {/* 👈 NEW */}
+              <TableHead>Collected By</TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
@@ -143,6 +144,7 @@ export function PickupTrackingView() {
               <TableRow key={p._id}>
                 <TableCell className="tabular-nums">{p.scheduledDate}</TableCell>
                 <TableCell>{p.supplierId?.shopName || "Unknown"}</TableCell>
+                <TableCell className="text-muted-foreground">{p.assignedTo?.name || "—"}</TableCell> {/* 👈 NEW */}
                 <TableCell className="text-muted-foreground">{p.collectedBy?.name || "—"}</TableCell>
                 <TableCell>
                   <span className="inline-flex rounded-full bg-success/20 text-success px-2 py-0.5 text-xs font-medium capitalize">
@@ -152,7 +154,7 @@ export function PickupTrackingView() {
               </TableRow>
             ))}
             {deliveredPickups.length === 0 && (
-              <TableRow><TableCell colSpan={4} className="text-center py-10 text-muted-foreground">No delivered history yet.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={5} className="text-center py-10 text-muted-foreground">No delivered history yet.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
