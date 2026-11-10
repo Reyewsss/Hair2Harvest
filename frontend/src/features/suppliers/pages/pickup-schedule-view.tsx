@@ -44,7 +44,7 @@ export function PickupScheduleView() {
       const activeData = await pickupsApi.getOldSchedule(date, "active");
       setActivePickups(activeData.pickups);
       
-      const pastData = await pickupsApi.getOldSchedule(date, "past");
+      const pastData = await pickupsApi.getOldSchedule("", "past");
       setPastPickups(pastData.pickups);
     } catch (err: any) {
       toast.error(err.message);

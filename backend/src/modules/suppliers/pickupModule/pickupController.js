@@ -61,13 +61,23 @@ export async function schedulePickup(req, res) {
 export async function getSchedule(req, res) {
   try {
     const { date, scope } = req.query;
-    let filter = { status: { $in: ["scheduled", "collected"] } };
-    if (date) filter.scheduledDate = date;
+    let filter = {};
+
+    if (scope === "past") {
+      // Show all delivered/cancelled pickups
+      filter.status = { $in: ["delivered", "cancelled"] };
+    } else {
+      // Active pickups for the selected date
+      filter.status = { $in: ["scheduled", "collected"] };
+      if (date) filter.scheduledDate = date;
+    }
 
     const pickups = await Pickup.find(filter)
       .populate("supplierId", "shopName owner phone street barangay code")
-         .populate("assignedTo", "name")
-      .sort({ scheduledTime: 1 });
+      .populate("assignedTo", "name")
+      .populate("collectedBy", "name")
+      .populate("deliveredBy", "name")
+      .sort({ scheduledDate: -1, scheduledTime: -1 });
 
     res.status(200).json({ pickups });
   } catch (error) {
@@ -159,31 +169,30 @@ export async function getSupplierPickups(req, res) {
 }
 
 /* ─── GET SCHEDULE (for the list view) ───────────────────────────────── */
-export async function getOldSchedule(req, res) {
-  try {
-    const { date, scope } = req.query; 
-    let filter = {};
+// export async function getOldSchedule(req, res) {
+//   try {
+//     const { date, scope } = req.query; 
+//     let filter = {};
 
-    if (scope === "past") {
-      // Past records (for the history table)
-      filter.status = { $in: ["collected", "delivered", "cancelled"] };
-      if (date) filter.scheduledDate = { $lt: date }; // Before selected date
-    } else {
-      // Active records (for today or future)
-      filter.status = { $in: ["scheduled", "collected"] };
-      if (date) filter.scheduledDate = date;
-    }
+//     if (scope === "past") {
+//       // Past records (for the history table)
+//       filter.status = { $in: ["collected", "delivered", "cancelled"] };
+//     } else {
+//       // Active records (for today or future)
+//       filter.status = { $in: ["scheduled", "collected"] };
+//       if (date) filter.scheduledDate = date;
+//     }
 
-    const pickups = await Pickup.find(filter)
-      .populate("supplierId", "shopName owner phone street barangay code")
-      .populate("assignedTo", "name")
-      .populate("collectedBy", "name")
-      .populate("deliveredBy", "name")
-      .sort({ scheduledDate: -1, scheduledTime: -1 }); // Newest first
+//     const pickups = await Pickup.find(filter)
+//       .populate("supplierId", "shopName owner phone street barangay code")
+//       .populate("assignedTo", "name")
+//       .populate("collectedBy", "name")
+//       .populate("deliveredBy", "name")
+//       .sort({ scheduledDate: -1, scheduledTime: -1 }); // Newest first
 
-    res.status(200).json({ pickups });
-  } catch (error) {
-    console.error("🚨 PICKUP ERROR:", error);
-    res.status(500).json({ message: error.message });
-  }
-}
+//     res.status(200).json({ pickups });
+//   } catch (error) {
+//     console.error("🚨 PICKUP ERROR:", error);
+//     res.status(500).json({ message: error.message });
+//   }
+// }

@@ -25,7 +25,7 @@ export function PickupTrackingView() {
       setActivePickups(res.pickups);
     });
 
-    pickupsApi.getOldSchedule(today, "past").then(res => {
+    pickupsApi.getOldSchedule("", "past").then(res => {
       setDeliveredPickups(res.pickups);
     });
   };
