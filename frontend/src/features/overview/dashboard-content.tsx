@@ -3,6 +3,7 @@ import {
   BadgeCheck,
   Calendar,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Cog,
   Download,
@@ -54,11 +55,13 @@ import {
   type StreamTable,
 } from "./data/overview-data.tsx";
 import { auditApi, type AuditEntry } from "@/features/audit/audit-api";
-import { useAuth } from "@/features/auth/context/auth-context"; // 👈 NEW
+import { useAuth } from "@/features/auth/context/auth-context";
+
+const PAGE_SIZE = 10;
 
 export function DashboardContent({ role = "admin" }: { role?: Role }) {
-  const { user } = useAuth(); // 👈 NEW
-  const effectiveRole = (user?.role ?? role) as Role; // 👈 NEW: use real role
+  const { user } = useAuth();
+  const effectiveRole = (user?.role ?? role) as Role;
   const [dateRange, setDateRange] = useState<DateRange>("last-7-days");
   const config = roleConfig[effectiveRole];
 
@@ -76,11 +79,14 @@ export function DashboardContent({ role = "admin" }: { role?: Role }) {
       />
       <TrendsSection charts={charts} />
       <StreamSection table={streamTables[config.table]} />
-      {/* 👇 Audit trail only for admins */}
       {effectiveRole === "admin" ? <AuditSection /> : null}
     </div>
   );
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+ * Overview Section (Metrics)
+ * ───────────────────────────────────────────────────────────────────── */
 
 function OverviewSection({
   roleLabel,
@@ -119,11 +125,7 @@ function OverviewSection({
               {rangeLabel}
               <ChevronDown className="size-5" />
             </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="start"
-              collisionPadding={16}
-              className="astrix-dashboard min-w-40"
-            >
+            <DropdownMenuContent align="start" className="astrix-dashboard min-w-40">
               <DropdownMenuRadioGroup
                 value={dateRange}
                 onValueChange={(value) => onDateRangeChange(value as DateRange)}
@@ -246,6 +248,10 @@ function MetricCardItem({ metric }: { metric: MetricCard }) {
     </article>
   );
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+ * Trends Section (Charts)
+ * ───────────────────────────────────────────────────────────────────── */
 
 function TrendsSection({ charts }: { charts: ChartSeries[] }) {
   return (
@@ -401,6 +407,10 @@ function TrendCard({ chart }: { chart: ChartSeries }) {
   );
 }
 
+/* ─────────────────────────────────────────────────────────────────────
+ * Stream Section (Recent Activity Table)
+ * ───────────────────────────────────────────────────────────────────── */
+
 function StreamSection({ table }: { table: StreamTable }) {
   return (
     <section className="flex flex-col gap-5">
@@ -512,7 +522,9 @@ function StreamRow({
   );
 }
 
-/* ---------- Audit Trail Section ---------- */
+/* ─────────────────────────────────────────────────────────────────────
+ * Audit Trail Section
+ * ───────────────────────────────────────────────────────────────────── */
 
 const actionTone: Record<string, string> = {
   create: "bg-success/10 text-success",
@@ -549,6 +561,8 @@ function AuditSection() {
   const [module, setModule] = useState("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  
+  const [page, setPage] = useState(1);
 
   const load = async () => {
     setLoading(true);
@@ -561,6 +575,7 @@ function AuditSection() {
         limit: 100,
       });
       setEntries(res.entries);
+      setPage(1);
     } catch (err: any) {
       toast.error(err?.message ?? "Failed to load audit trail");
     } finally {
@@ -572,6 +587,11 @@ function AuditSection() {
     void load();
   }, [search, module, from, to]);
 
+  const totalPages = Math.max(1, Math.ceil(entries.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const startIndex = (currentPage - 1) * PAGE_SIZE;
+  const paginatedEntries = entries.slice(startIndex, startIndex + PAGE_SIZE);
+
   return (
     <section className="flex flex-col gap-5">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -581,8 +601,7 @@ function AuditSection() {
             Audit Trail
           </h2>
           <p className="text-sm text-muted-foreground">
-            Immutable record of every action. Entries cannot be edited or
-            deleted.
+            Immutable record of every action. Entries cannot be edited or deleted.
           </p>
         </div>
         <Button
@@ -599,7 +618,6 @@ function AuditSection() {
       </div>
 
       <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center md:justify-between">
-        {/* 👈 Left: search */}
         <InputGroup className="h-11 w-full border-none bg-secondary px-3 py-1 md:max-w-sm">
           <InputGroupAddon className="pl-0">
             <Search className="size-3.5 text-input-addon-foreground" />
@@ -613,7 +631,6 @@ function AuditSection() {
           />
         </InputGroup>
 
-        {/* 👈 Right: filters grouped together */}
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           <select
             value={module}
@@ -667,24 +684,18 @@ function AuditSection() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell
-                  colSpan={6}
-                  className="py-10 text-center text-muted-foreground"
-                >
+                <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                   Loading audit trail...
                 </TableCell>
               </TableRow>
-            ) : entries.length === 0 ? (
+            ) : paginatedEntries.length === 0 ? (
               <TableRow>
-                <TableCell
-                  colSpan={6}
-                  className="py-10 text-center text-muted-foreground"
-                >
+                <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                   No audit entries match your filters.
                 </TableCell>
               </TableRow>
             ) : (
-              entries.map((entry) => (
+              paginatedEntries.map((entry) => (
                 <TableRow key={entry._id}>
                   <TableCell className="text-muted-foreground tabular-nums">
                     {new Date(entry.createdAt).toLocaleString("en-US", {
@@ -701,16 +712,13 @@ function AuditSection() {
                   <TableCell>
                     <span
                       className={`inline-flex rounded-xl px-2 py-0.5 text-xs font-medium capitalize ${
-                        actionTone[entry.action] ??
-                        "bg-secondary text-secondary-foreground"
+                        actionTone[entry.action] ?? "bg-secondary text-secondary-foreground"
                       }`}
                     >
                       {entry.action}
                     </span>
                   </TableCell>
-                  <TableCell className="whitespace-normal">
-                    {entry.item}
-                  </TableCell>
+                  <TableCell className="whitespace-normal">{entry.item}</TableCell>
                   <TableCell className="whitespace-normal text-muted-foreground">
                     {entry.remarks || "—"}
                   </TableCell>
@@ -719,6 +727,39 @@ function AuditSection() {
             )}
           </TableBody>
         </Table>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          Showing {Math.min(startIndex + 1, entries.length)}–{Math.min(startIndex + PAGE_SIZE, entries.length)} of {entries.length} entries
+        </p>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-lg"
+            className="size-10"
+            aria-label="Previous page"
+            disabled={currentPage <= 1}
+            onClick={() => setPage(currentPage - 1)}
+          >
+            <ChevronLeft className="size-5" />
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            {currentPage} / {totalPages}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-lg"
+            className="size-10"
+            aria-label="Next page"
+            disabled={currentPage >= totalPages}
+            onClick={() => setPage(currentPage + 1)}
+          >
+            <ChevronRight className="size-5" />
+          </Button>
+        </div>
       </div>
     </section>
   );
