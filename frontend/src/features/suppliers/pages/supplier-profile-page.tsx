@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Check,
   ChevronLeft,
-  ClipboardPlus,
   MapPin,
   MessageSquare,
   Pencil,
@@ -32,7 +31,6 @@ import {
   nextPickupLabel,
   sampleCollectors,
   windowLabel,
-  type HairType,
 } from "../data/suppliers-data";
 import { useCan } from "@/features/auth/access";
 import { useSuppliers } from "../store/suppliers-store";
@@ -42,20 +40,10 @@ import { LogPickupForm } from "../components/log-pickup-form";
 import { SmsReminderForm } from "../components/sms-reminder-form";
 import { ShopMap } from "../components/supplier-map";
 import { SupplierLink } from "../components/supplier-link";
-import {
-  GradeBadge,
-  HairTypeBadge,
-  SegmentedTabs,
-  StatusBadge,
-} from "../components/supplier-shared";
+import { HairTypeBadge, StatusBadge } from "../components/supplier-shared";
 import { pickupsApi } from "../suppliers-api";
 
 type DrawerKind = "edit" | "pickup" | "sms" | null;
-
-const hairOptions: { value: HairType; label: string }[] = [
-  { value: "untreated", label: "Untreated" },
-  { value: "treated", label: "Treated" },
-];
 
 const backLink = (
   <SupplierLink
@@ -72,14 +60,8 @@ export function SupplierProfilePage({
 }: {
   supplierId: string | undefined;
 }) {
-  const {
-    suppliers,
-    updateSupplier,
-    setHairType,
-    logPickup,
-    sendReminder,
-    loading,
-  } = useSuppliers();
+  const { suppliers, updateSupplier, logPickup, sendReminder, loading } =
+    useSuppliers();
   const canEdit = useCan("suppliers:edit");
 
   const [drawer, setDrawer] = useState<DrawerKind>(null);

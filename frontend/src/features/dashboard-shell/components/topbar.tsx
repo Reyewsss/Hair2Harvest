@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { X, Sun, Moon } from "lucide-react";
-import { BellIcon, CmdIcon, ImportProductIcon, SearchIcon } from "./icons";
+import { BellIcon, CmdIcon, SearchIcon } from "./icons";
 import { Button, buttonVariants } from "@/shared/ui/button";
 import {
   DropdownMenu,

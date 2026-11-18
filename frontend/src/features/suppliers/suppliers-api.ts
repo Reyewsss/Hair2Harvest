@@ -93,6 +93,18 @@ export const suppliersApi = {
     await api(`/suppliers/${id}`, { method: "DELETE" });
   },
 
+  review: async (
+    id: string,
+    status: "approved" | "rejected",
+    remarks?: string,
+  ) => {
+    const res = await api<{ supplier: any }>(`/suppliers/${id}/review`, {
+      method: "PATCH",
+      body: { status, remarks },
+    });
+    return mapBackendToFrontend(res.supplier);
+  },
+
   sendReminder: async (id: string, message: string) => {
     const res = await api<{ success: boolean; smsBatchId?: string }>(
       `/suppliers/${id}/send-reminder`,

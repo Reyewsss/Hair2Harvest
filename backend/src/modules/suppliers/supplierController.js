@@ -3,6 +3,7 @@ import Supplier from "./supplierModel.js";
 import { recordAudit } from "../audit/auditController.js";
 import { geocodeAddress } from "./utils/geocode.js";
 import { sendSms } from "./utils/sms.js";
+import { saveConsentDocument, openConsentDocument, deleteConsentDocument } from "./uploadConfig.js";
 // 👇 NEW: registration welcome email
 import { sendMail } from "./mailConfig/email.js";
 import { supplierRegisteredEmail } from "./mailConfig/emailTemplate.js";
@@ -63,6 +64,29 @@ export async function listSuppliers(req, res) {
     res.status(200).json({ success: true, total, page: Number(page), suppliers });
   } catch (error) {
     console.error("Error listing suppliers:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+}
+
+/** Streams a supplier's signed consent PDF. Requires login (router uses verifyToken). */
+export async function getConsentDocument(req, res) {
+  try {
+    const supplier = await findSupplier(req.params.id);
+    const stored = supplier?.consent?.document;
+    const stream = stored ? await openConsentDocument(stored) : null;
+    if (!stream) {
+      return res.status(404).json({ success: false, message: "Consent document not found" });
+    }
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="consent-${supplier.code || supplier._id}.pdf"`);
+    res.setHeader("Cache-Control", "private, no-store");
+    stream.on("error", (error) => {
+      console.error("Error streaming consent document:", error);
+      res.destroy(error);
+    });
+    stream.pipe(res);
+  } catch (error) {
+    console.error("Error fetching consent document:", error);
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 }
@@ -169,7 +193,7 @@ export async function createSupplier(req, res) {
         agreedBy: String(consentAgreedBy).trim(),
         agreedAt: new Date(),
         version: CONSENT_VERSION,
-        document: hasFile ? req.file.path : undefined,
+        document: hasFile ? await saveConsentDocument(req.file) : undefined,
       },
     });
 
@@ -368,8 +392,7 @@ export async function deleteSupplier(req, res) {
     };
 
     if (supplier.consent?.document) {
-      const fs = await import("fs");
-      fs.unlink(supplier.consent.document, () => {});
+      await deleteConsentDocument(supplier.consent.document);
     }
 
     await Supplier.deleteOne({ _id: supplier._id });

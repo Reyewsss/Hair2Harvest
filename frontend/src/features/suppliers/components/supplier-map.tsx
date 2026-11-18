@@ -169,7 +169,6 @@ export function ShopMap({
   lat,
   lng,
   title,
-  status,
 }: {
   lat: number;
   lng: number;

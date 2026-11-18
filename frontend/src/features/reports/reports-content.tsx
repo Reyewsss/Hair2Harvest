@@ -7,7 +7,7 @@ import {
   FileText,
   Search,
 } from "lucide-react";
-import { Button } from "@/shared/ui/button";
+import { Button, buttonVariants } from "@/shared/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -92,10 +92,11 @@ export function ReportsContent({ category }: { category?: string }) {
 
         {/* EXPORT BUTTON */}
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button className="gap-2">
-              <FileDown className="size-4" /> Export Current View
-            </Button>
+          <DropdownMenuTrigger
+            type="button"
+            className={buttonVariants({ className: "gap-2" })}
+          >
+            <FileDown className="size-4" /> Export Current View
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuLabel>Export Format</DropdownMenuLabel>

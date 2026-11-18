@@ -1,5 +1,5 @@
 import { useState, useEffect, type FormEvent } from "react";
-import { FileText, Loader2, MapPin, Upload } from "lucide-react";
+import { FileText, Loader2, Upload } from "lucide-react";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";

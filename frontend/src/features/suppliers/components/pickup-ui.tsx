@@ -214,14 +214,17 @@ export function TableEmpty({
 }) {
   return (
     <TableRow className="hover:bg-transparent">
-      <TableCell colSpan={colSpan} className="px-6 whitespace-normal">
-        <div className="mx-auto flex max-w-sm flex-col items-center gap-3 px-4 pt-14 pb-16 text-center">
+      <TableCell
+        colSpan={colSpan}
+        className="px-6 py-14 text-center whitespace-normal"
+      >
+        <div className="flex w-full flex-col items-center justify-center gap-3 text-center">
           <div className="flex size-11 items-center justify-center rounded-full bg-secondary">
             <Icon className="size-5 text-muted-foreground" />
           </div>
-          <p className="pt-1 font-medium">{title}</p>
+          <p className="w-full text-center font-medium">{title}</p>
           {description ? (
-            <p className="-mt-1 max-w-xs text-sm leading-relaxed text-muted-foreground">
+            <p className="-mt-1 w-full text-center text-sm leading-relaxed text-muted-foreground">
               {description}
             </p>
           ) : null}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ChevronDown, LogOut, Moon, Settings, Sun, User } from "lucide-react";
+import { ChevronDown, LogOut, User } from "lucide-react";
 import Logo from "../../../assets/hair2harvest-logo.svg";
 import LogoWhite from "../../../assets/hair2harvest-bnw-logo.svg";
 import { SidebarToggleIcon } from "./icons";
@@ -363,7 +363,7 @@ function groupNavigation(items: NavigationItem[]) {
 
 export function DashboardSidebar() {
   const { toggleSidebar } = useSidebar();
-  const { theme, toggleTheme } = useTheme();
+  const { theme } = useTheme();
   const { user, logout } = useAuth();
   const me = {
     name: user?.name ?? "",

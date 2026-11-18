@@ -1,5 +1,5 @@
 import react from '@vitejs/plugin-react'
-import path from 'path/win32' // For Windows ('path/win32'); For Mac ('path')
+import path from 'path' // resolves correctly on Windows, macOS and Linux (Vercel)
 import { defineConfig } from 'vite'
 import tailwindcss from '@tailwindcss/vite'
 

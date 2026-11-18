@@ -2,10 +2,8 @@
 import { useState } from "react";
 import {
   AlertTriangle,
-  Play,
   RotateCcw,
   ShieldAlert,
-  Square,
   Thermometer,
   Activity,
   Download,
@@ -32,11 +30,6 @@ export function MachineContent() {
   const [pendingAction, setPendingAction] = useState<
     "start" | "stop" | "mix" | null
   >(null);
-
-  const openConfirmation = (action: "start" | "stop" | "mix") => {
-    setPendingAction(action);
-    setIsModalOpen(true);
-  };
 
   const handleConfirmAction = () => {
     if (pendingAction === "start") setMotorState("running");

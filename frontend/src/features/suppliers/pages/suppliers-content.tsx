@@ -42,6 +42,9 @@ import {
   validateFile,
 } from "@/lib/upload-validation";
 
+// Consent PDFs are private; the API streams them only to logged-in users.
+const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5001/api";
+
 type StatusFilter = "all" | SupplierStatus;
 type FrequencyFilter = "all" | PickupFrequency;
 type View = "list" | "map";
@@ -326,7 +329,7 @@ export function SuppliersContent() {
                     <TableCell>
                       {s.consentDocument ? (
                         <a
-                          href={`http://localhost:5001/${s.consentDocument}`}
+                          href={`${API_BASE}/suppliers/${encodeURIComponent(s.id)}/consent`}
                           target="_blank"
                           rel="noreferrer"
                           className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"

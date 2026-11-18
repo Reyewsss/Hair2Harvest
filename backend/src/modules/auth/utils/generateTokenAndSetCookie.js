@@ -5,10 +5,11 @@ const sessionHours = () => Number(process.env.SESSION_HOURS) || 8;
 
 const baseCookie = () => {
   const production = process.env.NODE_ENV === "production";
+  const sameSite = process.env.COOKIE_SAMESITE || "lax";
   return {
     httpOnly: true, // JavaScript in the page can't read it
-    secure: production,
-    sameSite: process.env.COOKIE_SAMESITE || "lax",
+    secure: production || sameSite === "none", // browsers reject SameSite=None without Secure
+    sameSite,
     path: "/",
   };
 };

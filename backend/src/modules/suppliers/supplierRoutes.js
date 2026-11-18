@@ -4,6 +4,7 @@ import {
   deleteSupplier,
   sendReminder,
   getSupplier,
+  getConsentDocument,
   listSuppliers,
   reviewSupplier,
   updateSupplier
@@ -34,6 +35,7 @@ router.delete("/pickups/:id", deletePickup);
 router.get("/pickups/supplier/:supplierId", getSupplierPickups);
 
 router.get("/", listSuppliers);
+router.get("/:id/consent", getConsentDocument);
 router.get("/:id", getSupplier);
 router.post("/", upload.single("consentDocument"), createSupplier);
 router.patch("/:id", updateSupplier);
