@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { FileText, Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import {

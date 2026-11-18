@@ -101,7 +101,7 @@ export function DashboardContent({ role = "admin" }: { role?: Role }) {
   useEffect(() => {
     api<OverviewData>("/overview")
       .then((res) => setData(res))
-      .catch((err) => toast.error("Failed to load dashboard metrics"))
+      .catch(() => toast.error("Failed to load dashboard metrics"))
       .finally(() => setLoading(false));
   }, []);
 
