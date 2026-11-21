@@ -6,13 +6,15 @@ import { put, get, del } from "@vercel/blob";
 
 /*
  * Consent PDFs are personal data, so they are never served publicly.
- * - With BLOB_READ_WRITE_TOKEN set (Vercel): stored as PRIVATE Vercel Blobs.
+ * - With a Vercel Blob store connected (BLOB_READ_WRITE_TOKEN or BLOB_STORE_ID): stored as PRIVATE Vercel Blobs.
  *   The DB keeps the blob URL.
  * - Without it (local dev): stored on disk under ./uploads/consent_forms.
  *   The DB keeps "uploads/consent_forms/<file>".
  * Either way they are read back only through GET /api/suppliers/:id/consent (login required).
  */
-const useBlob = () => Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+// A connected Blob store provides either BLOB_READ_WRITE_TOKEN or, on newer projects, BLOB_STORE_ID
+// (the SDK then signs in with the deployment's OIDC token, no secret needed).
+const useBlob = () => Boolean(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID);
 const LOCAL_ROOT = path.join(process.cwd(), "uploads");
 const isBlobRef = (stored) => /^https?:\/\//.test(stored);
 // Only resolve paths inside ./uploads, so a bad DB value can't read or delete other files.
@@ -46,7 +48,7 @@ export async function saveConsentDocument(file) {
   if (process.env.VERCEL) {
     // Vercel's disk is read-only and wiped between requests, so never fall back to it there.
     throw new Error(
-      "File storage isn't configured. Connect a Vercel Blob store to the backend project (sets BLOB_READ_WRITE_TOKEN) and redeploy.",
+      "File storage isn't configured. Connect a Vercel Blob store to the backend project (sets BLOB_STORE_ID or BLOB_READ_WRITE_TOKEN) and redeploy.",
     );
   }
   const stored = `uploads/consent_forms/${name}`;

@@ -21,6 +21,9 @@ app.set("trust proxy", 1); // so rate limiting sees the real client IP behind a 
 
 app.use(helmet());
 app.use(cors({ origin: process.env.CLIENT_URL.split(",").map((o) => o.trim()), credentials: true }));
+// Collection photos arrive as base64 JSON (~200-500 KB after client-side compression), so this one
+// route gets a larger limit; Vercel caps request bodies at 4.5 MB. It must run before the global parser.
+app.use("/api/suppliers/pickups/:id/status", express.json({ limit: "3mb" }));
 app.use(express.json({ limit: "100kb" }));
 app.use(cookieParser());
 app.use("/api", rateLimit);
