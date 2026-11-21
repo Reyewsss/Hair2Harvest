@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { useNavigate, Link } from "react-router";
 import Logo from "../../../assets/hair2harvest-logo.svg";
+import { toast } from "sonner";
 import { errorMessage } from "@/lib/api";
 import { authApi } from "../auth-api";
 
@@ -21,6 +22,8 @@ const ForgotPasswordPage = () => {
     try {
       // The server answers the same whether or not the email has an account.
       await authApi.forgotPassword(email.trim());
+      // Worded neutrally: the server doesn't reveal whether the email has an account.
+      toast.success("If that email has an account, a code is on its way.");
       navigate("/verify-otp", {
         state: { email: email.trim().toLowerCase(), purpose: "reset" },
       });

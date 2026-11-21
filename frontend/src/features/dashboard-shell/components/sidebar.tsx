@@ -365,6 +365,7 @@ export function DashboardSidebar() {
   const { toggleSidebar } = useSidebar();
   const { theme } = useTheme();
   const { user, logout } = useAuth();
+  const { navigate } = useDashboardNavigation();
   const me = {
     name: user?.name ?? "",
     email: user?.email ?? "",
@@ -476,7 +477,7 @@ export function DashboardSidebar() {
                   </DropdownMenuLabel>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/profile")}>
                   <User />
                   Profile Settings
                 </DropdownMenuItem>

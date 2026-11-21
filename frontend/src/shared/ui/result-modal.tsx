@@ -11,11 +11,13 @@ import {
   XCircle,
   type LucideIcon,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/shared/ui/button";
 import { closeModal, openModal } from "@/shared/ui/modal";
 import { cn } from "@/lib/utils";
 
-/* Global result modal — call from anywhere:
+/* Global result feedback — call from anywhere. Successes show as a bottom-right toast;
+ * error / warning / exists open a modal:
  *
  *   showResult({ type: "success", title: "Pickup scheduled", message: "..." })
  *   showResult({ type: "exists",  title: "Already scheduled", message: "..." })
@@ -166,7 +168,41 @@ function ResultContent({
   );
 }
 
+// Outcomes the user only needs to notice go to the bottom-right toast; problems
+// (error / warning / exists) keep the modal so they can't be missed.
+const TOAST_TYPES = new Set<ResultType>([
+  "success",
+  "created",
+  "updated",
+  "deleted",
+  "archived",
+  "restored",
+  "info",
+]);
+
+// Toasts are one short sentence: the title, ending in a full stop. The modal-only
+// fields (message, details) are dropped here.
+const asSentence = (text: string) => (/[.!?]$/.test(text) ? text : `${text}.`);
+
+function showResultToast({ type, title, onClose }: ShowResultOptions) {
+  const style = resultStyles[type];
+  const Icon = style.icon;
+
+  const show =
+    type === "info"
+      ? toast.info
+      : type === "deleted" || type === "archived"
+        ? toast // neutral: a deliberate removal isn't an error, but isn't a green "success" either
+        : toast.success;
+  show(asSentence(title ?? style.fallbackTitle), {
+    icon: <Icon className="size-4" />,
+    onDismiss: onClose ? () => onClose() : undefined,
+    onAutoClose: onClose ? () => onClose() : undefined,
+  });
+}
+
 export function showResult(options: ShowResultOptions) {
+  if (TOAST_TYPES.has(options.type)) return showResultToast(options);
   openModal({
     // Heading lives inside the content (under the icon), so the modal header stays empty.
     title: "",

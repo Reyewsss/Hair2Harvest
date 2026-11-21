@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { toast } from "sonner";
 import { setUnauthorizedHandler } from "@/lib/api";
 import { authApi, type AuthUser } from "../auth-api";
 
@@ -25,6 +26,8 @@ interface AuthContextValue {
     rememberMe: boolean,
   ) => Promise<void>;
   logout: () => Promise<void>;
+  /** Replace the signed-in user after a profile edit, so the sidebar etc. update. */
+  updateUser: (user: AuthUser) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -71,13 +74,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     try {
       await authApi.logout();
+      toast.success("You have been signed out.");
     } finally {
       setUser(null);
     }
   }, []);
 
   const value = useMemo(
-    () => ({ user, loading, login, verifyLoginOtp, logout }),
+    () => ({ user, loading, login, verifyLoginOtp, logout, updateUser: setUser }),
     [user, loading, login, verifyLoginOtp, logout],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

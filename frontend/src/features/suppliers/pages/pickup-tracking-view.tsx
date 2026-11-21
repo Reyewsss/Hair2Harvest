@@ -61,7 +61,7 @@ function CollectConfirmModal({
   const handleConfirm = async () => {
     const n = Number(sacks);
     if (!Number.isFinite(n) || n < 0 || sacks.trim() === "") {
-      toast.error("Enter a valid number of sacks");
+      toast.error("Enter a valid number of sacks.");
       return;
     }
     setBusy(true);
@@ -155,7 +155,7 @@ export function PickupTrackingView() {
         .then((res) => setDeliveredPickups(res.pickups)),
     ])
       .catch((err: any) =>
-        toast.error(err?.message ?? "Failed to load pickups"),
+        toast.error(err?.message ?? "Failed to load pickups."),
       )
       .finally(() => setLoading(false));
   };
@@ -179,10 +179,10 @@ export function PickupTrackingView() {
         payload.sacks = sacks;
       }
       await pickupsApi.updateStatus(id, status, payload);
-      toast.success(`Marked as ${status}`);
+      showResult({ type: status === "collected" ? "success" : "updated", title: `Marked as ${status}` });
       loadTracking();
     } catch (err: any) {
-      toast.error(err.message);
+      showResult({ type: "error", title: "Couldn't update pickup", message: err?.message ?? "Please try again." });
     } finally {
       setProcessingId(null);
     }

@@ -6,6 +6,21 @@ export interface AuthUser {
   name: string;
   email: string;
   role: Role;
+  // Returned by /auth/me and /auth/profile (see toSafeJSON in the backend).
+  firstName?: string;
+  lastName?: string;
+  isActive?: boolean;
+  lastLoginAt?: string | null;
+  createdAt?: string;
+}
+
+export interface ActivityEntry {
+  _id: string;
+  action: string;
+  module: string;
+  item: string;
+  remarks?: string;
+  createdAt: string;
 }
 
 export type OtpPurpose = "login" | "reset";
@@ -25,4 +40,10 @@ export const authApi = {
   resetPassword: (resetToken: string, newPassword: string) =>
     api<{ message: string }>("/auth/reset-password", { body: { resetToken, newPassword } }),
   logout: () => api<{ message: string }>("/auth/logout", { method: "POST", body: {} }),
+  // Self-service profile
+  updateProfile: (firstName: string, lastName: string) =>
+    api<{ user: AuthUser }>("/auth/profile", { method: "PATCH", body: { firstName, lastName } }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    api<{ message: string }>("/auth/change-password", { body: { currentPassword, newPassword } }),
+  activity: () => api<{ entries: ActivityEntry[] }>("/auth/activity").then((r) => r.entries),
 };

@@ -4,6 +4,7 @@ import type { ChangeEvent, FormEvent } from "react";
 import { useNavigate, useLocation, Link, Navigate } from "react-router";
 import { Eye, EyeOff } from "lucide-react"; // 👈 Added import
 import Logo from "../../../assets/hair2harvest-logo.svg";
+import { toast } from "sonner";
 import { errorMessage } from "@/lib/api";
 import { authApi } from "../auth-api";
 
@@ -61,10 +62,8 @@ const ResetPasswordPage = () => {
     setBusy(true);
     try {
       await authApi.resetPassword(resetToken, password);
-      navigate("/login", {
-        replace: true,
-        state: { notice: "Password updated. Sign in with your new password." },
-      });
+      toast.success("Password updated. Sign in with your new password.");
+      navigate("/login", { replace: true });
     } catch (err) {
       setError(errorMessage(err));
       setBusy(false);

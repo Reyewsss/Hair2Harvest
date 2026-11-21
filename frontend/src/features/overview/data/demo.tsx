@@ -6,7 +6,12 @@ import {
   DashboardNavigationProvider,
   useDashboardNavigation,
 } from "../../dashboard-shell/components/navigation";
-import { ReportsContent } from "../../reports/reports-content";
+import {
+  DashboardLink,
+} from "../../dashboard-shell/components/navigation";
+import { NotFound } from "@/shared/ui/not-found";
+import { Button } from "@/shared/ui/button";
+import { ProfilePage } from "@/features/profile/profile-page";
 import { ThemeProvider } from "../../dashboard-shell/components/theme-provider";
 import { InventoryContent } from "@/features/inventory/pages/inventory-content";
 import { InventoryViewPage } from "@/features/inventory/pages/inventory-view-page";
@@ -27,9 +32,13 @@ function DashboardRoute() {
   const { pathname } = useDashboardNavigation();
   const { user } = useAuth();
 
-  let content: ReactNode = <DashboardContent />;
+  let content: ReactNode;
 
-  if (pathname === "/accounts") {
+  if (pathname === "/") {
+    content = <DashboardContent />;
+  } else if (pathname === "/profile") {
+    content = <ProfilePage />;
+  } else if (pathname === "/accounts") {
     content = <AccountManagementContent />;
   } else if (pathname === "/inventory") {
     content = <InventoryContent />;
@@ -47,8 +56,18 @@ function DashboardRoute() {
     content = <MachineContent />;
   } else if (pathname === "/composting") {
     content = <CompostingContent />;
-  } else if (pathname === "/reports" || pathname.startsWith("/reports/")) {
-    content = <ReportsContent category={pathname.split("/")[2]} />;
+  } else {
+    // Unknown sections, and Reports (not available yet), get the 404 page.
+    content = (
+      <NotFound
+        path={pathname}
+        action={
+          <Button render={<DashboardLink href="/" />} nativeButton={false} className="h-10 px-5">
+            Back to dashboard
+          </Button>
+        }
+      />
+    );
   }
 
   // Role check. The server enforces the same rules on every API call.

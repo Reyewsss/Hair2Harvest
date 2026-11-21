@@ -2,7 +2,8 @@
 body:has(.astrix-dashboard) [data-slot="sidebar"][data-mobile="true"],
 body:has(.astrix-dashboard) [data-slot="dropdown-menu-content"],
 body:has(.astrix-dashboard) [data-slot="sheet-content"],
-body:has(.astrix-dashboard) [data-slot="tooltip-content"] {
+body:has(.astrix-dashboard) [data-slot="tooltip-content"],
+[data-sonner-toaster] {
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: #41431b;
@@ -51,7 +52,8 @@ body:has(.astrix-dashboard) [data-slot="tooltip-content"] {
 .dark body:has(.astrix-dashboard) [data-slot="sidebar"][data-mobile="true"],
 .dark body:has(.astrix-dashboard) [data-slot="dropdown-menu-content"],
 .dark body:has(.astrix-dashboard) [data-slot="sheet-content"],
-.dark body:has(.astrix-dashboard) [data-slot="tooltip-content"] {
+.dark body:has(.astrix-dashboard) [data-slot="tooltip-content"],
+.dark [data-sonner-toaster] {
   --background: oklch(0.178 0.016 113.8); /* #11120a */
   --foreground: oklch(0.947 0.028 98.1); /* #f2eed9 cream */
   --card: oklch(0.224 0.027 114.8); /* #1b1d0e */
@@ -285,4 +287,10 @@ body:has(.astrix-dashboard) [data-slot="tooltip-content"] > svg {
   padding-block: 0.625rem;
   padding-left: 0.625rem;
   padding-right: 2rem;
+}
+
+/* Toasts render outside .astrix-dashboard (portal on <body>), so they get the palette
+   through the [data-sonner-toaster] selectors above; sonner hard-codes a system font. */
+[data-sonner-toaster] {
+  font-family: var(--font-sans) !important;
 }

@@ -101,7 +101,7 @@ export function DashboardContent({ role = "admin" }: { role?: Role }) {
   useEffect(() => {
     api<OverviewData>("/overview")
       .then((res) => setData(res))
-      .catch(() => toast.error("Failed to load dashboard metrics"))
+      .catch(() => toast.error("Failed to load dashboard metrics."))
       .finally(() => setLoading(false));
   }, []);
 
@@ -846,7 +846,7 @@ function AuditSection() {
       setEntries(res.entries);
       setPage(1);
     } catch (err: any) {
-      toast.error(err?.message ?? "Failed to load audit trail");
+      toast.error(err?.message ?? "Failed to load audit trail.");
     } finally {
       setLoading(false);
     }
@@ -895,7 +895,7 @@ function AuditSection() {
           className="h-10 gap-1 px-3.5"
           onClick={() => {
             auditApi.exportCsv();
-            toast.success("Audit trail exported");
+            toast.success("Audit trail exported.");
           }}
         >
           <Download className="size-4" />

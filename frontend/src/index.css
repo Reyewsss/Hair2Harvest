@@ -133,3 +133,48 @@
     @apply font-sans;
   }
 }
+
+/* ── Themed scrollbars ─────────────────────────────────────────────────────
+   Replaces the browser's default scrollbar everywhere (page, modals, drawers,
+   dropdowns, tables) with a slim olive one from the dashboard palette.
+   .no-scrollbar and .custom-scrollbar-x in dashboard.css are more specific and still win. */
+:root {
+  --scrollbar-size: 0.5rem;
+  --scrollbar-thumb: rgb(65 67 27 / 0.28); /* #41431b */
+  --scrollbar-thumb-hover: rgb(65 67 27 / 0.5);
+}
+.dark {
+  --scrollbar-thumb: oklch(0.759 0.07 116.2 / 0.3); /* sage #aeb784 */
+  --scrollbar-thumb-hover: oklch(0.759 0.07 116.2 / 0.55);
+}
+
+/* Chrome, Edge, Safari */
+::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: 9999px;
+  border: 2px solid transparent; /* inset look */
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+::-webkit-scrollbar-button {
+  display: none;
+}
+
+/* Firefox (only when the WebKit pseudo-elements aren't supported; in Chrome 121+
+   setting scrollbar-color would switch off the rounded styles above) */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+  }
+}

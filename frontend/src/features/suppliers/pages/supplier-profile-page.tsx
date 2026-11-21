@@ -42,6 +42,7 @@ import { ShopMap } from "../components/supplier-map";
 import { SupplierLink } from "../components/supplier-link";
 import { HairTypeBadge, StatusBadge } from "../components/supplier-shared";
 import { pickupsApi } from "../suppliers-api";
+import { showResult } from "@/shared/ui/result-modal";
 
 type DrawerKind = "edit" | "pickup" | "sms" | null;
 
@@ -65,18 +66,11 @@ export function SupplierProfilePage({
   const canEdit = useCan("suppliers:edit");
 
   const [drawer, setDrawer] = useState<DrawerKind>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [submittingEdit, setSubmittingEdit] = useState(false);
   const [submittingSms, setSubmittingSms] = useState(false);
 
   const [liveHistory, setLiveHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
-
-  useEffect(() => {
-    if (!notice) return;
-    const timer = setTimeout(() => setNotice(null), 5000);
-    return () => clearTimeout(timer);
-  }, [notice]);
 
   useEffect(() => {
     if (!supplierId) return;
@@ -140,9 +134,13 @@ export function SupplierProfilePage({
     try {
       await updateSupplier(supplier.id, formData);
       close();
-      setNotice("Details saved.");
+      showResult({ type: "updated", title: "Details saved", message: supplier.shopName });
     } catch (error: any) {
-      alert(error.message || "Failed to save details.");
+      showResult({
+        type: "error",
+        title: "Couldn't save details",
+        message: error.message || "Failed to save details.",
+      });
     } finally {
       setSubmittingEdit(false);
     }
@@ -213,14 +211,6 @@ export function SupplierProfilePage({
         </p>
       ) : null}
 
-      {notice ? (
-        <p
-          role="status"
-          className="rounded-lg bg-success/10 px-4 py-3 text-sm text-success"
-        >
-          {notice}
-        </p>
-      ) : null}
       {canEdit && !canLog ? (
         <p className="rounded-lg bg-secondary px-4 py-3 text-sm text-muted-foreground">
           This shop is a Candidate. Open Edit Details and record consent to
@@ -398,7 +388,7 @@ export function SupplierProfilePage({
           onSubmit={(input) => {
             logPickup(supplier.id, input);
             close();
-            setNotice("Pickup logged.");
+            showResult({ type: "created", title: "Pickup logged", message: supplier.shopName });
           }}
         />
       </Drawer>
@@ -420,9 +410,17 @@ export function SupplierProfilePage({
             try {
               await sendReminder(supplier.id, message);
               close();
-              setNotice("Reminder sent.");
+              showResult({
+                type: "success",
+                title: "Reminder sent",
+                message: `SMS sent to ${supplier.ownerName}.`,
+              });
             } catch (error: any) {
-              alert(error.message || "Failed to send reminder.");
+              showResult({
+                type: "error",
+                title: "Couldn't send reminder",
+                message: error.message || "Failed to send reminder.",
+              });
             } finally {
               setSubmittingSms(false);
             }

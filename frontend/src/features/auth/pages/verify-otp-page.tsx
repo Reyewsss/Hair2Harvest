@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate, useLocation, Link, Navigate } from "react-router";
 import Logo from "../../../assets/hair2harvest-logo.svg";
+import { toast } from "sonner";
 import { errorMessage } from "@/lib/api";
 import { authApi } from "../auth-api";
 import type { OtpPurpose } from "../auth-api";
@@ -28,7 +29,6 @@ const VerifyOtpPage = () => {
 
   const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
-  const [info, setInfo] = useState("");
   const [busy, setBusy] = useState(false);
   const [cooldown, setCooldown] = useState(RESEND_SECONDS);
 
@@ -46,7 +46,6 @@ const VerifyOtpPage = () => {
     if (otp.length !== 6) return setError("Enter the 6-digit code.");
 
     setError("");
-    setInfo("");
     setBusy(true);
     try {
       if (purpose === "login") {
@@ -67,7 +66,7 @@ const VerifyOtpPage = () => {
     setError("");
     try {
       await authApi.resendOtp(email, purpose);
-      setInfo("A new code is on its way.");
+      toast.success("A new code was sent to your email.");
       setCooldown(RESEND_SECONDS);
     } catch (err) {
       setError(errorMessage(err));
@@ -119,12 +118,7 @@ const VerifyOtpPage = () => {
             />
           </div>
 
-          {/* Info and error messages */}
-          {info && (
-            <div className="mb-4 p-3 bg-[#F5FFDB] border border-[#E3DBBB] rounded-lg">
-              <p className="text-[12px] text-[#41431B] text-center">{info}</p>
-            </div>
-          )}
+          {/* Error message (successes such as "new code sent" show as a toast) */}
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-[12px] text-red-600 text-center">{error}</p>
