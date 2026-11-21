@@ -4,7 +4,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://hair2-harvest-8vjx.vercel.app/api/:path*" },
+    { "source": "/api/:path*", "destination": "https://hair2-harvest-7q8q.vercel.app/api/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
