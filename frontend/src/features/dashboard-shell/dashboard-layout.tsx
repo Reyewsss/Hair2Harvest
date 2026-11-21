@@ -1,7 +1,8 @@
-import { useEffect, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { ShieldCheck } from "lucide-react"; // 👈 Changed to ShieldCheck
 import { DashboardSidebar } from "./components/sidebar";
 import { DashboardTopbar } from "./components/topbar";
+import { useDashboardNavigation } from "./components/navigation";
 import { SidebarProvider } from "@/shared/ui/sidebar";
 import { useAuth } from "@/features/auth/context/auth-context";
 import { openModal, closeModal } from "@/shared/ui/modal";
@@ -65,6 +66,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     });
   }, [user, loading]);
 
+  // New page starts at the top instead of inheriting the last page's scroll position.
+  const { pathname } = useDashboardNavigation();
+  const contentRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    contentRef.current?.scrollTo({ top: 0 });
+  }, [pathname]);
+
   return (
     <div className="h-svh w-screen overflow-hidden bg-muted/30">
       <SidebarProvider
@@ -81,13 +89,21 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         {/* Main content area pulled away from the edges to match the floating sidebar */}
         <main className="flex flex-1 flex-col overflow-hidden ml-6 p-3 pl-0">
           {/* Floating Topbar */}
-          <div className="sticky top-0 z-50 w-full bg-sidebar rounded-xl border border-border/50 shadow-sm mb-3">
+          <div className="h2h-enter-down sticky top-0 z-50 w-full bg-sidebar rounded-xl border border-border/50 shadow-sm mb-3">
             <DashboardTopbar />
           </div>
 
           {/* Floating Content Area */}
-          <div className="flex-1 overflow-y-auto bg-background rounded-xl border border-border/50 shadow-sm p-4">
-            {children}
+          <div
+            ref={contentRef}
+            className="h2h-enter-up flex-1 overflow-y-auto bg-background rounded-xl border border-border/50 shadow-sm p-4"
+          >
+            {/* Keyed by page: each navigation remounts it, replaying the page + container
+                animations in dashboard.css (.h2h-page). */}
+            {/* min-h-full + flex column: lets a page-level loader fill and centre in the panel. */}
+            <div key={pathname} className="h2h-page flex min-h-full flex-col">
+              {children}
+            </div>
           </div>
         </main>
       </SidebarProvider>

@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "../../../shared/ui/dropdown-menu.tsx";
 import { cn } from "@/lib/utils";
+import { AnimatedNumber } from "@/shared/ui/animated-number";
 import { stages, type LogType, type PickupStage } from "../data/inventory-data";
 
 export const fieldClass =
@@ -152,7 +153,7 @@ export function SummaryCard({
         {label}
       </p>
       <p className="text-[1.625rem] leading-none font-semibold md:text-[2rem]">
-        {value}
+        <AnimatedNumber value={value} />
       </p>
       {note ? (
         <p className="text-xs font-medium text-muted-foreground">{note}</p>

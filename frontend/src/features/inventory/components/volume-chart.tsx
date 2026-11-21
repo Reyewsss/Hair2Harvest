@@ -1,4 +1,5 @@
 import { fmtKg } from "../data/inventory-data";
+import { AnimatedNumber } from "@/shared/ui/animated-number";
 
 export function VolumeChart({
   title = "Volume collected",
@@ -24,7 +25,7 @@ export function VolumeChart({
         </div>
         <div className="text-right">
           <p className="text-xl leading-none font-semibold tabular-nums">
-            {fmtKg(Math.round(total * 10) / 10)}
+            <AnimatedNumber value={fmtKg(Math.round(total * 10) / 10)} />
           </p>
           <p className="mt-1 text-xs text-muted-foreground">in this window</p>
         </div>

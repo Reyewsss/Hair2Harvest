@@ -42,6 +42,7 @@ import {
   formatBytes,
   validateFile,
 } from "@/lib/upload-validation";
+import { LeafLoader } from "@/shared/ui/leaf-loader";
 
 // Consent PDFs are private; the API streams them only to logged-in users.
 
@@ -191,9 +192,7 @@ export function SuppliersContent() {
 
   if (loading)
     return (
-      <div className="p-8 text-center text-muted-foreground">
-        Loading suppliers...
-      </div>
+      <LeafLoader label="Loading contributors" page />
     );
 
   return (

@@ -30,6 +30,7 @@ import { VolumeChart } from "../components/volume-chart";
 import { useCan } from "@/features/auth/access";
 import { useInventory } from "../store/inventory-store";
 import { useSuppliers } from "@/features/suppliers/store/suppliers-store";
+import { LeafLoader } from "@/shared/ui/leaf-loader";
 
 export function InventoryContent() {
   const { logs = [], loading } = useInventory();
@@ -52,9 +53,7 @@ export function InventoryContent() {
 
   if (loading) {
     return (
-      <div className="p-8 text-center text-muted-foreground">
-        Loading inventory...
-      </div>
+      <LeafLoader label="Loading inventory" page />
     );
   }
 

@@ -133,7 +133,7 @@ const VerifyOtpPage = () => {
             {busy
               ? "Verifying..."
               : purpose === "login"
-                ? "Verify and Sign In"
+                ? "Verify"
                 : "Verify Code"}
           </button>
 

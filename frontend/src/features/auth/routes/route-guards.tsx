@@ -1,9 +1,11 @@
 import { Navigate, Outlet, useLocation } from "react-router";
 import { useAuth } from "../context/auth-context.tsx";
+import { LeafLoader } from "@/shared/ui/leaf-loader";
 
 const Checking = () => (
-  <div className="flex min-h-screen items-center justify-center text-sm text-gray-500">
-    Loading...
+  // .astrix-dashboard: dashboard palette (olive leaf) before the dashboard has mounted.
+  <div className="astrix-dashboard flex min-h-screen items-center justify-center">
+    <LeafLoader label="Checking your session" size="lg" />
   </div>
 );
 

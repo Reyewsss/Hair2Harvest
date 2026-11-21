@@ -24,6 +24,7 @@ import { ROLE_LABELS, type Role } from "@/features/auth/permissions";
 import { Drawer } from "@/features/suppliers/components/drawer"; // shared side drawer
 import { accountsApi, type Account } from "./accounts-api";
 import { AccountForm } from "./components/account-form";
+import { LeafLoader } from "@/shared/ui/leaf-loader";
 
 type RoleFilter = "all" | Role;
 type Status = "active" | "pending" | "deactivated";
@@ -267,9 +268,9 @@ export function AccountManagementContent() {
               <TableRow>
                 <TableCell
                   colSpan={6}
-                  className="py-10 text-center text-muted-foreground"
+                  className="py-10! text-center text-muted-foreground"
                 >
-                  Loading accounts...
+                  <LeafLoader label="Loading accounts" />
                 </TableCell>
               </TableRow>
             ) : pageRows.length === 0 ? (

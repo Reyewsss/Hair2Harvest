@@ -3,6 +3,7 @@ import { format, isValid, parse } from "date-fns";
 import { Inbox, type LucideIcon } from "lucide-react";
 import { TableCell, TableRow } from "@/shared/ui/table";
 import { cn } from "@/lib/utils";
+import { AnimatedNumber } from "@/shared/ui/animated-number";
 
 /* ─── Formatters ─────────────────────────────────────────────────── */
 
@@ -145,7 +146,7 @@ export function StatCard({
       <div className="min-w-0">
         <p className="text-xs font-medium text-muted-foreground">{label}</p>
         <p className="text-2xl leading-tight font-semibold tabular-nums">
-          {value}
+          <AnimatedNumber value={value} />
         </p>
         {note ? (
           <p className="truncate text-xs text-muted-foreground">{note}</p>

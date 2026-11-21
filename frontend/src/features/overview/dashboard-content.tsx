@@ -61,6 +61,8 @@ import {
   formatPickupDate,
   formatPickupTime,
 } from "@/features/suppliers/components/pickup-ui";
+import { AnimatedNumber } from "@/shared/ui/animated-number";
+import { LeafLoader } from "@/shared/ui/leaf-loader";
 
 const PAGE_SIZE = 10;
 
@@ -305,7 +307,7 @@ function MetricCardItem({ metric }: { metric: MetricCard }) {
 
         <div className="flex flex-col gap-2 md:gap-3 break-words min-w-0">
           <p className="text-[1.625rem] leading-none font-semibold md:text-[2rem]">
-            {metric.value}
+            <AnimatedNumber value={metric.value} />
           </p>
 
           {metric.trend ? (
@@ -410,7 +412,7 @@ function TrendCard({ chart }: { chart: ChartSeries }) {
         </div>
         <div className="text-right">
           <p className="text-xl leading-none font-semibold tabular-nums">
-            {chart.summary}
+            <AnimatedNumber value={chart.summary} />
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             {chart.summaryNote}
@@ -628,7 +630,7 @@ function PickupsDueSection({ table }: { table: StreamTable }) {
 
   const shown = due.slice(0, 6);
   const emptyText = loading
-    ? "Loading pickups..."
+    ? <LeafLoader label="Loading pickups" />
     : failed
       ? "Couldn't load pickups."
       : "No pickups due. You're all caught up.";
@@ -670,7 +672,7 @@ function PickupsDueSection({ table }: { table: StreamTable }) {
             <TableRow>
               <TableCell
                 colSpan={5}
-                className="px-6 py-10 text-center text-muted-foreground"
+                className="px-6! py-10! text-center text-muted-foreground"
               >
                 {emptyText}
               </TableCell>
@@ -972,9 +974,9 @@ function AuditSection() {
               <TableRow>
                 <TableCell
                   colSpan={6}
-                  className="py-10 text-center text-muted-foreground"
+                  className="py-10! text-center text-muted-foreground"
                 >
-                  Loading audit trail...
+                  <LeafLoader label="Loading audit trail" />
                 </TableCell>
               </TableRow>
             ) : paginatedEntries.length === 0 ? (

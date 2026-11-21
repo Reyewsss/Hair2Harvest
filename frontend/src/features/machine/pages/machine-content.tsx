@@ -22,6 +22,7 @@ import {
   useMachineTelemetry,
   initialSessionLogs,
 } from "../data/machine-data.tsx";
+import { AnimatedNumber } from "@/shared/ui/animated-number";
 
 export function MachineContent() {
   const { temperature, motorState, setMotorState, health } =
@@ -95,7 +96,7 @@ export function MachineContent() {
             <p
               className={`text-3xl font-bold ${temperature > 55 ? "text-destructive" : ""}`}
             >
-              {temperature}°C
+              <AnimatedNumber value={`${temperature}°C`} duration={600} />
             </p>
             <p className="text-xs text-muted-foreground">Live from sensor</p>
           </div>

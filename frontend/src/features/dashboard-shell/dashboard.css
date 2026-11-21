@@ -327,3 +327,170 @@ body:has(.astrix-dashboard) [data-slot="tooltip-content"] > svg {
   from { transform: scale(0.4); opacity: 0.9; }
   to { transform: scale(2.4); opacity: 0; }
 }
+
+/* ── Dashboard motion ──────────────────────────────────────────────────────
+   1. Shell (once, on sign-in / reload): sidebar slides in, topbar drops, content rises.
+   2. Page (every navigation): .h2h-page is keyed by path in dashboard-layout.tsx, so it
+      remounts and fades in.
+   3. Containers: each top-level block of a page (header, cards, tables, map) rises in
+      turn, then table rows and grid cards cascade.
+   All use fill-mode "backwards": once finished, no transform is left behind, so fixed
+   drawers, sticky headers and Leaflet maps inside a page behave normally. */
+
+@keyframes h2h-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes h2h-drop {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes h2h-slide-right {
+  from { opacity: 0; transform: translateX(-24px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes h2h-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.astrix-dashboard {
+  --h2h-ease: cubic-bezier(0.22, 1, 0.36, 1); /* ease-out-quint: quick start, soft landing */
+}
+
+/* 1. Shell */
+.astrix-dashboard [data-slot="sidebar-inner"] {
+  animation: h2h-slide-right 0.55s var(--h2h-ease) backwards;
+}
+.astrix-dashboard [data-slot="sidebar-menu-item"] {
+  animation: h2h-slide-right 0.45s var(--h2h-ease) backwards;
+}
+.astrix-dashboard [data-slot="sidebar-content"] [data-slot="sidebar-menu-item"]:nth-child(1) { animation-delay: 0.12s; }
+.astrix-dashboard [data-slot="sidebar-content"] [data-slot="sidebar-menu-item"]:nth-child(2) { animation-delay: 0.16s; }
+.astrix-dashboard [data-slot="sidebar-content"] [data-slot="sidebar-menu-item"]:nth-child(3) { animation-delay: 0.2s; }
+.astrix-dashboard [data-slot="sidebar-content"] [data-slot="sidebar-menu-item"]:nth-child(4) { animation-delay: 0.24s; }
+.astrix-dashboard [data-slot="sidebar-content"] [data-slot="sidebar-menu-item"]:nth-child(5) { animation-delay: 0.28s; }
+.astrix-dashboard [data-slot="sidebar-content"] [data-slot="sidebar-menu-item"]:nth-child(6) { animation-delay: 0.32s; }
+.astrix-dashboard [data-slot="sidebar-content"] [data-slot="sidebar-menu-item"]:nth-child(n + 7) { animation-delay: 0.36s; }
+.astrix-dashboard [data-slot="sidebar-footer"] [data-slot="sidebar-menu-item"] { animation-delay: 0.3s; }
+
+.astrix-dashboard .h2h-enter-down {
+  animation: h2h-drop 0.5s var(--h2h-ease) 0.05s backwards;
+}
+.astrix-dashboard .h2h-enter-up {
+  animation: h2h-rise 0.55s var(--h2h-ease) 0.1s backwards;
+}
+
+/* 2. Page */
+.h2h-page {
+  animation: h2h-fade 0.3s ease-out backwards;
+}
+
+/* 3. Containers: the page root's children (header, filters, cards, tables...) */
+.h2h-page > * > * {
+  animation: h2h-rise 0.5s var(--h2h-ease) backwards;
+}
+.h2h-page > * > :nth-child(1) { animation-delay: 0.04s; }
+.h2h-page > * > :nth-child(2) { animation-delay: 0.1s; }
+.h2h-page > * > :nth-child(3) { animation-delay: 0.16s; }
+.h2h-page > * > :nth-child(4) { animation-delay: 0.22s; }
+.h2h-page > * > :nth-child(5) { animation-delay: 0.28s; }
+.h2h-page > * > :nth-child(6) { animation-delay: 0.34s; }
+.h2h-page > * > :nth-child(n + 7) { animation-delay: 0.4s; }
+
+/* Cards laid out in grids (stat tiles, profile cards) cascade inside their container. */
+.h2h-page > * > .grid > *,
+.h2h-page > * > * > .grid > * {
+  animation: h2h-rise 0.5s var(--h2h-ease) backwards;
+}
+.h2h-page .grid > :nth-child(1) { animation-delay: 0.12s; }
+.h2h-page .grid > :nth-child(2) { animation-delay: 0.18s; }
+.h2h-page .grid > :nth-child(3) { animation-delay: 0.24s; }
+.h2h-page .grid > :nth-child(4) { animation-delay: 0.3s; }
+.h2h-page .grid > :nth-child(n + 5) { animation-delay: 0.36s; }
+
+/* Table rows fade in one after another (also when new rows arrive after loading). */
+.h2h-page [data-slot="table-body"] > [data-slot="table-row"] {
+  animation: h2h-rise 0.4s var(--h2h-ease) backwards;
+}
+.h2h-page [data-slot="table-body"] > [data-slot="table-row"]:nth-child(1) { animation-delay: 0.15s; }
+.h2h-page [data-slot="table-body"] > [data-slot="table-row"]:nth-child(2) { animation-delay: 0.19s; }
+.h2h-page [data-slot="table-body"] > [data-slot="table-row"]:nth-child(3) { animation-delay: 0.23s; }
+.h2h-page [data-slot="table-body"] > [data-slot="table-row"]:nth-child(4) { animation-delay: 0.27s; }
+.h2h-page [data-slot="table-body"] > [data-slot="table-row"]:nth-child(5) { animation-delay: 0.31s; }
+.h2h-page [data-slot="table-body"] > [data-slot="table-row"]:nth-child(6) { animation-delay: 0.35s; }
+.h2h-page [data-slot="table-body"] > [data-slot="table-row"]:nth-child(7) { animation-delay: 0.39s; }
+.h2h-page [data-slot="table-body"] > [data-slot="table-row"]:nth-child(n + 8) { animation-delay: 0.43s; }
+
+/* Respect the OS "reduce motion" setting: no movement, content just appears. */
+/* (Only these entrance animations: spinners and loading skeletons keep running.) */
+@media (prefers-reduced-motion: reduce) {
+  .astrix-dashboard [data-slot="sidebar-inner"],
+  .astrix-dashboard [data-slot="sidebar-menu-item"],
+  .astrix-dashboard .h2h-enter-down,
+  .astrix-dashboard .h2h-enter-up,
+  .h2h-page,
+  .h2h-page > * > *,
+  .h2h-page > * > .grid > *,
+  .h2h-page > * > * > .grid > *,
+  .h2h-page [data-slot="table-body"] > [data-slot="table-row"] {
+    animation: none !important;
+  }
+}
+
+/* Leaf loader (shared/ui/leaf-loader.tsx). The leaf pivots on its stem (bottom-left),
+   its vein redraws, and the shadow breathes with the sway. */
+.h2h-leaf {
+  transform-origin: 12% 88%;
+  animation: h2h-leaf-sway 1.6s ease-in-out infinite;
+}
+.h2h-leaf-vein {
+  stroke-dasharray: 26;
+  animation: h2h-leaf-vein 1.6s ease-in-out infinite;
+}
+.h2h-leaf-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 70%;
+  height: 4px;
+  margin-left: -35%;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.18;
+  animation: h2h-leaf-shadow 1.6s ease-in-out infinite;
+}
+.h2h-dots::after {
+  content: "...";
+  display: inline-block;
+  width: 0;
+  overflow: hidden;
+  vertical-align: bottom;
+  animation: h2h-dots 1.2s steps(4, jump-none) infinite;
+}
+@keyframes h2h-leaf-sway {
+  0%, 100% { transform: rotate(-10deg) scale(0.96); }
+  50% { transform: rotate(8deg) scale(1.04); }
+}
+@keyframes h2h-leaf-vein {
+  0% { stroke-dashoffset: 26; }
+  45%, 70% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: -26; }
+}
+@keyframes h2h-leaf-shadow {
+  0%, 100% { transform: scaleX(0.75); opacity: 0.12; }
+  50% { transform: scaleX(1.1); opacity: 0.22; }
+}
+@keyframes h2h-dots {
+  to { width: 3ch; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .h2h-leaf,
+  .h2h-leaf-vein,
+  .h2h-leaf-shadow {
+    animation: none;
+  }
+  .h2h-leaf {
+    animation: h2h-fade 1.2s ease-in-out infinite alternate; /* gentle blink only */
+  }
+}

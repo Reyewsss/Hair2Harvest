@@ -4,6 +4,7 @@ import { InventoryLink } from "../components/inventory-link";
 import { useInventory } from "../store/inventory-store";
 import { InventoryContent } from "./inventory-content";
 import { StockView } from "../views/stock-view";
+import { LeafLoader } from "@/shared/ui/leaf-loader";
 
 export function InventoryViewPage({ tab }: { tab: string | undefined }) {
   const { logs, loading } = useInventory();
@@ -12,7 +13,7 @@ export function InventoryViewPage({ tab }: { tab: string | undefined }) {
   if (!isInventoryTab(tab)) return <InventoryContent />;
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-10 px-4 pt-8 pb-10 md:px-6">
+    <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-10 px-4 pt-8 pb-10 md:px-6">
       <div className="space-y-3">
         <InventoryLink
           href={INVENTORY_HREF}
@@ -28,9 +29,7 @@ export function InventoryViewPage({ tab }: { tab: string | undefined }) {
       </div>
 
       {loading ? (
-        <div className="p-8 text-center text-muted-foreground">
-          Loading logs...
-        </div>
+        <LeafLoader label="Loading logs" page />
       ) : (
         tab === "stock" && <StockView logs={logs} pickups={[]} />
       )}

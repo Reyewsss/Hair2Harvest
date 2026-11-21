@@ -43,6 +43,7 @@ import { SupplierLink } from "../components/supplier-link";
 import { HairTypeBadge, StatusBadge } from "../components/supplier-shared";
 import { pickupsApi } from "../suppliers-api";
 import { showResult } from "@/shared/ui/result-modal";
+import { LeafLoader } from "@/shared/ui/leaf-loader";
 
 type DrawerKind = "edit" | "pickup" | "sms" | null;
 
@@ -95,9 +96,7 @@ export function SupplierProfilePage({
 
   if (loading) {
     return (
-      <div className="p-8 text-center text-muted-foreground">
-        Loading profile...
-      </div>
+      <LeafLoader label="Loading profile" page />
     );
   }
 
@@ -268,9 +267,9 @@ export function SupplierProfilePage({
                   <TableRow>
                     <TableCell
                       colSpan={4}
-                      className="py-10 text-center text-muted-foreground"
+                      className="py-10! text-center text-muted-foreground"
                     >
-                      Loading history...
+                      <LeafLoader label="Loading history" />
                     </TableCell>
                   </TableRow>
                 ) : liveHistory.length === 0 ? (
