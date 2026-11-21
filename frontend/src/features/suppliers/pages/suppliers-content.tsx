@@ -1,3 +1,4 @@
+import { API_BASE } from "@/lib/api";
 import { useMemo, useState } from "react";
 import { FileText, Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
@@ -43,7 +44,6 @@ import {
 } from "@/lib/upload-validation";
 
 // Consent PDFs are private; the API streams them only to logged-in users.
-const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5001/api";
 
 type StatusFilter = "all" | SupplierStatus;
 type FrequencyFilter = "all" | PickupFrequency;

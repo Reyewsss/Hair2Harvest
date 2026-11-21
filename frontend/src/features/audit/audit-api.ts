@@ -1,4 +1,4 @@
-import { api } from "@/lib/api";
+import { api, API_BASE } from "@/lib/api";
 
 export type AuditEntry = {
   _id: string;
@@ -32,7 +32,7 @@ export const auditApi = {
   },
 
   exportCsv: () => {
-    const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5001/api";
+    const BASE = API_BASE;
     window.location.href = `${BASE}/audit/export`;
   },
 };

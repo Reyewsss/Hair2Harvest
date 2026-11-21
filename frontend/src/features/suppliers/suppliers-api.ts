@@ -1,4 +1,4 @@
-import { api } from "@/lib/api";
+import { api, API_BASE } from "@/lib/api";
 import type { Supplier } from "./data/suppliers-data";
 
 export const mapBackendToFrontend = (b: any): Supplier => {
@@ -49,7 +49,7 @@ export const suppliersApi = {
   },
 
   create: async (formData: FormData) => {
-    const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5001/api";
+    const BASE = API_BASE;
     const res = await fetch(`${BASE}/suppliers`, {
       method: "POST",
       credentials: "include",
@@ -122,7 +122,7 @@ export const pickupsApi = {
     frequency: string;
     assignedTo?: string;
   }) => {
-    const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5001/api";
+    const BASE = API_BASE;
     const res = await fetch(`${BASE}/suppliers/pickups`, {
       method: "POST",
       credentials: "include",
@@ -143,7 +143,7 @@ export const pickupsApi = {
     id: string,
     data: { date: string; time: string; assignedTo?: string },
   ) => {
-    const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5001/api";
+    const BASE = API_BASE;
     const res = await fetch(`${BASE}/suppliers/pickups/${id}`, {
       method: "PATCH",
       credentials: "include",
@@ -160,7 +160,7 @@ export const pickupsApi = {
   },
 
   remove: async (id: string) => {
-    const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5001/api";
+    const BASE = API_BASE;
     const res = await fetch(`${BASE}/suppliers/pickups/${id}`, {
       method: "DELETE",
       credentials: "include",
@@ -175,7 +175,7 @@ export const pickupsApi = {
   },
 
   archive: async (id: string) => {
-    const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5001/api";
+    const BASE = API_BASE;
     const res = await fetch(`${BASE}/suppliers/pickups/${id}/archive`, {
       method: "PATCH",
       credentials: "include",
@@ -190,7 +190,7 @@ export const pickupsApi = {
   },
 
   restore: async (id: string) => {
-    const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5001/api";
+    const BASE = API_BASE;
     const res = await fetch(`${BASE}/suppliers/pickups/${id}/restore`, {
       method: "PATCH",
       credentials: "include",
@@ -205,7 +205,7 @@ export const pickupsApi = {
   },
 
   getSchedule: async (date: string) => {
-    const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5001/api";
+    const BASE = API_BASE;
     const res = await fetch(`${BASE}/suppliers/pickups?date=${date}`, {
       credentials: "include",
     });
@@ -214,7 +214,7 @@ export const pickupsApi = {
   },
 
   updateStatus: async (id: string, status: string, payload: any = {}) => {
-    const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5001/api";
+    const BASE = API_BASE;
     const res = await fetch(`${BASE}/suppliers/pickups/${id}/status`, {
       method: "PATCH",
       credentials: "include",
@@ -229,7 +229,7 @@ export const pickupsApi = {
     date: string,
     scope: "active" | "past" | "archived" = "active",
   ) => {
-    const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5001/api";
+    const BASE = API_BASE;
     const res = await fetch(`${BASE}/suppliers/pickups?date=${date}&scope=${scope}`, {
       credentials: "include",
     });
@@ -245,7 +245,7 @@ export const pickupsApi = {
 
 export const staffApi = {
   list: async () => {
-    const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5001/api";
+    const BASE = API_BASE;
     const res = await fetch(`${BASE}/accounts/staff`, { credentials: "include" });
     if (!res.ok) throw new Error("Failed to load staff");
     const data = await res.json();

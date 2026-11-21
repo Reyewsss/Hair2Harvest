@@ -1,4 +1,8 @@
-const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5001/api";
+// Local dev talks to the backend directly; production builds use /api, which frontend/vercel.json proxies
+// to the backend so the session cookie is first-party. VITE_API_URL overrides both.
+export const API_BASE =
+  import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://localhost:5001/api" : "/api");
+const BASE = API_BASE;
 
 export class ApiError extends Error {
   status: number;
