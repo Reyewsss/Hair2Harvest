@@ -43,6 +43,12 @@ export async function saveConsentDocument(file) {
     });
     return blob.url;
   }
+  if (process.env.VERCEL) {
+    // Vercel's disk is read-only and wiped between requests, so never fall back to it there.
+    throw new Error(
+      "File storage isn't configured. Connect a Vercel Blob store to the backend project (sets BLOB_READ_WRITE_TOKEN) and redeploy.",
+    );
+  }
   const stored = `uploads/consent_forms/${name}`;
   await fs.mkdir(path.dirname(localPath(stored)), { recursive: true });
   await fs.writeFile(localPath(stored), file.buffer);
