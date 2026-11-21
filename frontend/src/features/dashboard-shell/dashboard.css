@@ -31,7 +31,7 @@ body:has(.astrix-dashboard) [data-slot="tooltip-content"],
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --sidebar: #e8f5c93c;
+  --sidebar: #e8f5c9d3;
   --sidebar-foreground: #e8f5c917;
   --sidebar-primary: #41431b;
   --sidebar-primary-foreground: oklch(0.985 0 0);
@@ -293,4 +293,37 @@ body:has(.astrix-dashboard) [data-slot="tooltip-content"] > svg {
    through the [data-sonner-toaster] selectors above; sonner hard-codes a system font. */
 [data-sonner-toaster] {
   font-family: var(--font-sans) !important;
+}
+
+/* Map pins (see features/suppliers/components/map-pin.ts). Both effects are centred on the
+   pin's tip, i.e. the exact coordinate. */
+.h2h-pin {
+  background: none;
+  border: none;
+}
+.h2h-pin-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: -3px;
+  width: 45%;
+  height: 6px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.28);
+  filter: blur(1.5px);
+}
+.h2h-pin-pulse {
+  position: absolute;
+  left: 50%;
+  bottom: -9px;
+  width: 18px;
+  height: 18px;
+  margin-left: -9px;
+  border-radius: 50%;
+  border: 2px solid var(--pin-color);
+  animation: h2h-pin-pulse 1.8s ease-out infinite;
+}
+@keyframes h2h-pin-pulse {
+  from { transform: scale(0.4); opacity: 0.9; }
+  to { transform: scale(2.4); opacity: 0; }
 }

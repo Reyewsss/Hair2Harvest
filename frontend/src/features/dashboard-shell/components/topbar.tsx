@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { X, Sun, Moon } from "lucide-react";
-import { BellIcon, CmdIcon, SearchIcon } from "./icons";
+import { BellIcon, SearchIcon } from "./icons";
+import { GlobalSearch } from "./global-search";
 import { Button, buttonVariants } from "@/shared/ui/button";
 import {
   DropdownMenu,
@@ -11,11 +12,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/shared/ui/dropdown-menu";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@/shared/ui/input-group";
 import { SidebarTrigger } from "@/shared/ui/sidebar";
 import { useTheme } from "./theme-provider";
 import {
@@ -39,7 +35,6 @@ function scrollToAuditTrail() {
 }
 
 export function DashboardTopbar() {
-  const [searchQuery, setSearchQuery] = useState("");
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const mobileSearchInputRef = useRef<HTMLInputElement>(null);
@@ -97,19 +92,12 @@ export function DashboardTopbar() {
     <header className="flex h-16 items-center justify-between gap-4 px-4 md:px-6 md:pr-8">
       {isMobileSearchOpen ? (
         <div className="flex w-full items-center gap-2.5 md:hidden">
-          <InputGroup className="h-10 flex-1 border-none bg-white px-3 py-1">
-            <InputGroupAddon className="pl-0">
-              <SearchIcon className="size-3.5 text-input-addon-foreground" />
-            </InputGroupAddon>
-            <InputGroupInput
-              ref={mobileSearchInputRef}
-              className="h-full p-0 px-1.5!"
-              aria-label="Search"
-              placeholder="Search products, HS codes, classifications..."
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-            />
-          </InputGroup>
+          <GlobalSearch
+            inputRef={mobileSearchInputRef}
+            className="flex-1"
+            autoFocus
+            onDone={closeMobileSearch}
+          />
           <Button
             type="button"
             variant="outline"
@@ -125,31 +113,7 @@ export function DashboardTopbar() {
         <>
           <div className="flex flex-1 items-center gap-2 md:max-w-105">
             <SidebarTrigger className="size-10 md:hidden [&_svg]:size-5!" />
-
-            <InputGroup className="hidden h-10 flex-1 border-none bg-secondary px-3 py-1 md:flex">
-              <InputGroupAddon className="pl-0">
-                <SearchIcon className="size-3.5 text-input-addon-foreground" />
-              </InputGroupAddon>
-              <InputGroupInput
-                ref={searchInputRef}
-                className="h-full p-0 px-1.5!"
-                aria-label="Search"
-                placeholder="Search products, HS codes, classifications..."
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-              />
-              {searchQuery === "" ? (
-                <InputGroupAddon
-                  align="inline-end"
-                  className="pr-0 text-input-addon-foreground"
-                >
-                  <div className="flex items-center gap-1 rounded-md bg-background px-2 py-1.5">
-                    <CmdIcon className="size-2.5" />
-                    <span className="text-sm leading-none font-medium">K</span>
-                  </div>
-                </InputGroupAddon>
-              ) : null}
-            </InputGroup>
+            <GlobalSearch inputRef={searchInputRef} className="hidden flex-1 md:block" />
           </div>
 
           <div className="flex shrink-0 items-center gap-2 md:gap-4">

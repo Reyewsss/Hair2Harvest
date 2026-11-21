@@ -216,7 +216,8 @@ export function TableEmpty({
     <TableRow className="hover:bg-transparent">
       <TableCell
         colSpan={colSpan}
-        className="px-6 py-14 text-center whitespace-normal"
+        // `!` because dashboard.css zeroes padding-block on every table cell.
+        className="px-6! py-12! text-center whitespace-normal"
       >
         <div className="flex w-full flex-col items-center justify-center gap-3 text-center">
           <div className="flex size-11 items-center justify-center rounded-full bg-secondary">

@@ -2,27 +2,20 @@ import { useEffect, useMemo, useState } from "react";
 import { MapPin } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
-import { hasPin, type Supplier } from "../data/suppliers-data";
+import { makePin, PIN_COLORS } from "./map-pin";
+import { formatAddress, hasPin, type Supplier } from "../data/suppliers-data";
 import { SupplierLink } from "./supplier-link.tsx";
 import { StatusBadge } from "./supplier-shared";
 
-// Colored pin built from a tiny SVG so we don't need the default marker PNGs.
-const makePinIcon = (enrolled: boolean, focused: boolean) =>
-  L.divIcon({
-    className: "",
-    html: `
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-        width="${focused ? 34 : 28}" height="${focused ? 34 : 28}"
-        fill="currentColor"
-        style="color:${enrolled ? "var(--primary, #2563eb)" : "#9ca3af"};
-               filter: drop-shadow(0 1px 2px rgba(0,0,0,.35));
-               transition: transform .15s ease;"
-      >
-        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/>
-      </svg>`,
-    iconSize: [focused ? 34 : 28, focused ? 34 : 28],
-    iconAnchor: [focused ? 17 : 14, focused ? 34 : 28],
-  });
+// Cache icons: Leaflet re-creates the marker DOM whenever the icon object changes.
+const pinFor = (enrolled: boolean, focused: boolean) =>
+  makePin({ color: enrolled ? PIN_COLORS.enrolled : PIN_COLORS.candidate, focused });
+const ICONS = {
+  enrolled: pinFor(true, false),
+  enrolledFocused: pinFor(true, true),
+  candidate: pinFor(false, false),
+  candidateFocused: pinFor(false, true),
+};
 
 // Auto-fits the viewport and handles re-measuring for animated layouts.
 function FitToPins({ bounds }: { bounds: L.LatLngBoundsExpression | null }) {
@@ -97,10 +90,10 @@ export function SupplierPinMap({ suppliers }: { suppliers: Supplier[] }) {
         {/* Legend overlay */}
         <div className="pointer-events-none absolute top-3 left-3 z-[1000] flex items-center gap-4 rounded-lg border bg-card/90 px-3 py-1.5 text-xs">
           <span className="flex items-center gap-1.5">
-            <MapPin className="size-3.5 text-primary" /> Enrolled
+            <MapPin className="size-3.5" style={{ color: PIN_COLORS.enrolled }} /> Enrolled
           </span>
           <span className="flex items-center gap-1.5">
-            <MapPin className="size-3.5 text-muted-foreground" /> Candidate
+            <MapPin className="size-3.5" style={{ color: PIN_COLORS.candidate }} /> Candidate
           </span>
         </div>
 
@@ -120,13 +113,18 @@ export function SupplierPinMap({ suppliers }: { suppliers: Supplier[] }) {
             <Marker
               key={s.id}
               position={[s.lat!, s.lng!]}
-              icon={makePinIcon(s.status === "enrolled", focusId === s.id)}
+              icon={
+                ICONS[
+                  `${s.status === "enrolled" ? "enrolled" : "candidate"}${focusId === s.id ? "Focused" : ""}` as keyof typeof ICONS
+                ]
+              }
+              zIndexOffset={focusId === s.id ? 1000 : 0}
               eventHandlers={{ click: () => setFocusId(s.id) }}
             >
               <Popup>
-                <div className="space-y-1">
+                <div className="space-y-0.5">
                   <p className="text-sm font-medium">{s.shopName}</p>
-                  <p className="text-xs text-muted-foreground">{s.barangay}</p>
+                  <p className="text-xs text-muted-foreground">{formatAddress(s)}</p>
                 </div>
               </Popup>
             </Marker>
@@ -139,7 +137,7 @@ export function SupplierPinMap({ suppliers }: { suppliers: Supplier[] }) {
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{focus.shopName}</p>
               <p className="truncate text-xs text-muted-foreground">
-                {focus.barangay}
+                {formatAddress(focus)}
               </p>
             </div>
             <StatusBadge status={focus.status} />
@@ -163,38 +161,53 @@ export function SupplierPinMap({ suppliers }: { suppliers: Supplier[] }) {
   );
 }
 
-// Single-shop map for the profile page: an OpenStreetMap embed centred on the saved pin.
-// Renamed to ShopMap to match the import in supplier-profile-page.tsx.
+// Single-shop map for the profile page: the saved pin on a Leaflet map, same pin as everywhere else.
 export function ShopMap({
   lat,
   lng,
   title,
+  status = "enrolled",
 }: {
   lat: number;
   lng: number;
   title: string;
   status?: "enrolled" | "candidate";
 }) {
-  const dLat = 0.003;
-  const dLng = 0.004;
-  const src = `https://www.openstreetmap.org/export/embed.html?bbox=${lng - dLng}%2C${lat - dLat}%2C${lng + dLng}%2C${lat + dLat}&layer=mapnik&marker=${lat}%2C${lng}`;
-
+  const icon = useMemo(
+    () => makePin({ color: status === "enrolled" ? PIN_COLORS.enrolled : PIN_COLORS.candidate, size: 34 }),
+    [status],
+  );
   return (
     <div className="space-y-2">
-      <iframe
-        title={`Map of ${title}`}
-        src={src}
-        loading="lazy"
-        className="h-56 w-full rounded-lg border"
-      />
-      <a
-        href={`https://www.google.com/maps?q=${lat},${lng}`}
-        target="_blank"
-        rel="noreferrer"
-        className="text-sm font-medium text-primary hover:underline"
-      >
-        Open in Google Maps
-      </a>
+      <div className="h-56 overflow-hidden rounded-lg border">
+        <MapContainer
+          key={`${lat},${lng}`}
+          center={[lat, lng]}
+          zoom={18}
+          scrollWheelZoom={false}
+          style={{ height: "100%", width: "100%", zIndex: 0 }}
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            maxZoom={19}
+          />
+          <Marker position={[lat, lng]} icon={icon} title={title} />
+        </MapContainer>
+      </div>
+      <div className="flex items-center justify-between gap-3 text-sm">
+        <span className="text-xs tabular-nums text-muted-foreground">
+          {lat.toFixed(5)}, {lng.toFixed(5)}
+        </span>
+        <a
+          href={`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`}
+          target="_blank"
+          rel="noreferrer"
+          className="font-medium text-primary hover:underline"
+        >
+          Open in Google Maps
+        </a>
+      </div>
     </div>
   );
 }

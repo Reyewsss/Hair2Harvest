@@ -1,7 +1,6 @@
 import { useState, useEffect, type FormEvent } from "react";
 import { FileText, Loader2, Upload } from "lucide-react";
-import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
-import L from "leaflet";
+import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { toast } from "sonner";
 import { Button } from "@/shared/ui/button.tsx";
@@ -13,6 +12,8 @@ import {
 } from "../data/suppliers-data";
 import { REGISTRATION_SOURCE, CONSENT_VERSION } from "../registration-source";
 import { Field, StatusBadge, fieldClass } from "./supplier-shared.tsx";
+import { makePin } from "./map-pin";
+import { geocodeStreet, PRECISION_LABEL, type GeocodeMatch } from "../geocode";
 
 // 👇 Must NOT start with 0 — the +63 prefix already covers the country code.
 const PH_LOCAL_DIGITS = /^[1-9]\d{9}$/;
@@ -34,18 +35,19 @@ function fullPhone(local: string): string {
   return digits.length === 10 ? `${PHONE_PREFIX}${digits}` : "";
 }
 
-const pinIcon = L.divIcon({
-  className: "",
-  html: `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-      width="32" height="32" fill="currentColor"
-      style="color:var(--primary, #2563eb);
-             filter: drop-shadow(0 1px 2px rgba(0,0,0,.35));">
-      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/>
-    </svg>`,
-  iconSize: [32, 32],
-  iconAnchor: [16, 32],
-});
+const pinIcon = makePin({ size: 34 });
+
+// Moves the map to the pin whenever an address lookup (not the user) places it, so a found
+// address is never off-screen. MapContainer's own `center` only applies on first render.
+function RecenterOnLookup({ position, version }: { position: [number, number]; version: number }) {
+  const map = useMap();
+  useEffect(() => {
+    if (version === 0) return;
+    map.flyTo(position, Math.max(map.getZoom(), 17), { duration: 0.6 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [version]);
+  return null;
+}
 
 function ClickableMarker({
   position,
@@ -115,36 +117,45 @@ export function SupplierForm({
   const [pinLng, setPinLng] = useState<number>(
     initial?.lng ?? FALLBACK_CENTER[1],
   );
-  const [pinMoved, setPinMoved] = useState(false);
+  // A saved shop already has an exact pin; don't overwrite it with a lookup on open.
+  const [pinMoved, setPinMoved] = useState(
+    initial?.lat !== undefined && initial?.lng !== undefined,
+  );
   const [geoLoading, setGeoLoading] = useState(false);
+  const [matches, setMatches] = useState<GeocodeMatch[]>([]);
+  const [chosen, setChosen] = useState<GeocodeMatch | null>(null);
+  const [lookupVersion, setLookupVersion] = useState(0); // bumps → map flies to the pin
 
+  const placeAt = (match: GeocodeMatch) => {
+    setPinLat(match.lat);
+    setPinLng(match.lng);
+    setChosen(match);
+    setLookupVersion((v) => v + 1);
+  };
+
+  // Look the street up (debounced; Nominatim allows ~1 request/second). Unit/floor isn't
+  // part of the lookup, see geocode.ts.
   useEffect(() => {
-    if (!street.trim()) return;
-    if (pinMoved) return;
-
+    if (pinMoved || street.trim().length < 3) return;
+    const controller = new AbortController();
     const timer = setTimeout(async () => {
       setGeoLoading(true);
       try {
-        const q = [unit, street, FIXED_BARANGAY, "Quezon City", "Philippines"]
-          .filter(Boolean)
-          .join(", ");
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=ph`,
-          { headers: { "User-Agent": "Hair2Harvest/1.0" } },
-        );
-        const data = await res.json();
-        if (data.length) {
-          setPinLat(parseFloat(data[0].lat));
-          setPinLng(parseFloat(data[0].lon));
-        }
+        const found = await geocodeStreet(street, controller.signal);
+        setMatches(found);
+        if (found.length) placeAt(found[0]);
+        else setChosen(null);
       } catch {
-        /* keep whatever pin we had */
+        /* aborted or offline: keep whatever pin we had */
       } finally {
-        setGeoLoading(false);
+        if (!controller.signal.aborted) setGeoLoading(false);
       }
-    }, 600);
-    return () => clearTimeout(timer);
-  }, [street, unit, pinMoved]);
+    }, 800);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [street, pinMoved]);
 
   const errors = {
     shopName: shopName.trim() ? "" : "Enter the shop name.",
@@ -397,10 +408,8 @@ export function SupplierForm({
               <input
                 className={fieldClass}
                 value={unit}
-                onChange={(e) => {
-                  setUnit(e.target.value);
-                  setPinMoved(false);
-                }}
+                // Not used for the map lookup (see geocode.ts), so editing it keeps the pin.
+                onChange={(e) => setUnit(e.target.value)}
                 placeholder="e.g. 2nd floor, Unit 3B"
               />
             </Field>
@@ -413,13 +422,58 @@ export function SupplierForm({
                     ? "Finding address..."
                     : pinMoved
                       ? "Custom pin"
-                      : "Auto-located"}
+                      : chosen
+                        ? "Auto-located"
+                        : street.trim()
+                          ? "Address not found"
+                          : "Enter a street"}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">
                 Drag the pin or click anywhere on the map to set the exact spot.
                 Use this when the auto-pin is off.
               </p>
+
+              {!pinMoved && chosen ? (
+                <p
+                  className={
+                    chosen.precision === "exact"
+                      ? "rounded-md bg-success/10 px-2.5 py-1.5 text-xs text-success"
+                      : "rounded-md bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-400"
+                  }
+                >
+                  {PRECISION_LABEL[chosen.precision]}
+                </p>
+              ) : null}
+
+              {!pinMoved && matches.length > 1 ? (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Not the right place? Pick another match:
+                  </p>
+                  <div className="flex flex-col gap-1">
+                    {matches.map((m) => {
+                      const selected = chosen?.lat === m.lat && chosen?.lng === m.lng;
+                      return (
+                        <button
+                          key={`${m.lat},${m.lng}`}
+                          type="button"
+                          onClick={() => placeAt(m)}
+                          className={
+                            "truncate rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors " +
+                            (selected
+                              ? "border-primary bg-primary/10 font-medium text-foreground"
+                              : "hover:bg-secondary")
+                          }
+                          title={m.label}
+                        >
+                          {m.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
 
               <div className="h-64 overflow-hidden rounded-lg border">
                 <MapContainer
@@ -435,6 +489,10 @@ export function SupplierForm({
                   <ClickableMarker
                     position={[pinLat, pinLng]}
                     onChange={handlePinChange}
+                  />
+                  <RecenterOnLookup
+                    position={[pinLat, pinLng]}
+                    version={lookupVersion}
                   />
                 </MapContainer>
               </div>
