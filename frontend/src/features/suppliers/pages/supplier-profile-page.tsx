@@ -44,6 +44,7 @@ import { HairTypeBadge, StatusBadge } from "../components/supplier-shared";
 import { pickupsApi } from "../suppliers-api";
 import { showResult } from "@/shared/ui/result-modal";
 import { LeafLoader } from "@/shared/ui/leaf-loader";
+import { ReviewPanel } from "../components/review-panel";
 
 type DrawerKind = "edit" | "pickup" | "sms" | null;
 
@@ -62,9 +63,10 @@ export function SupplierProfilePage({
 }: {
   supplierId: string | undefined;
 }) {
-  const { suppliers, updateSupplier, logPickup, sendReminder, loading } =
+  const { suppliers, updateSupplier, logPickup, sendReminder, reviewSupplier, loading } =
     useSuppliers();
   const canEdit = useCan("suppliers:edit");
+  const canApprove = useCan("suppliers:approve");
 
   const [drawer, setDrawer] = useState<DrawerKind>(null);
   const [submittingEdit, setSubmittingEdit] = useState(false);
@@ -152,13 +154,13 @@ export function SupplierProfilePage({
           {backLink}
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-semibold">{supplier.shopName}</h1>
-            <StatusBadge status={supplier.status} />
+            <StatusBadge status={supplier.status} review={supplier.review} />
             <HairTypeBadge hairType={supplier.hairType} />
           </div>
           <p className="text-lg text-muted-foreground">{supplier.ownerName}</p>
           <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground">
             <a
-              href={`tel:${supplier.phone.replace(/\s/g, "")}`}
+              href={`tel:${(supplier.phone || "").replace(/\s/g, "")}`}
               className="inline-flex items-center gap-1.5 hover:text-foreground"
             >
               <Phone className="size-4" />
@@ -210,7 +212,13 @@ export function SupplierProfilePage({
         </p>
       ) : null}
 
-      {canEdit && !canLog ? (
+      {!canLog && supplier.registrationSource !== "admin" ? (
+        <ReviewPanel
+          supplier={supplier}
+          canApprove={canApprove}
+          onReview={(status, remarks) => reviewSupplier(supplier.id, status, remarks)}
+        />
+      ) : canEdit && !canLog ? (
         <p className="rounded-lg bg-secondary px-4 py-3 text-sm text-muted-foreground">
           This shop is a Candidate. Open Edit Details and record consent to
           enroll it before logging pickups.
@@ -321,7 +329,7 @@ export function SupplierProfilePage({
             <Row
               label="Last reminder"
               value={
-                supplier.lastReminder
+                supplier.lastReminder?.at
                   ? `${formatDate(supplier.lastReminder.at.slice(0, 10))}, ${formatTime(supplier.lastReminder.at.slice(11, 16))}`
                   : "Never sent"
               }

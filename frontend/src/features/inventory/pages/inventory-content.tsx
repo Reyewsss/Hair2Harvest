@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CalendarPlus, ChevronRight } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import {
@@ -31,9 +31,43 @@ import { useCan } from "@/features/auth/access";
 import { useInventory } from "../store/inventory-store";
 import { useSuppliers } from "@/features/suppliers/store/suppliers-store";
 import { LeafLoader } from "@/shared/ui/leaf-loader";
+import { pickupsApi } from "@/features/suppliers/suppliers-api";
+import { SupplierLink } from "@/features/suppliers/components/supplier-link";
+
+/** Active (scheduled / collected) pickups from the backend, in the Inventory shape. */
+function useActivePickups() {
+  const [pickups, setPickups] = useState<Pickup[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    pickupsApi
+      .getOldSchedule("", "active")
+      .then((res: { pickups?: any[] }) =>
+        setPickups(
+          (res.pickups ?? []).map((p) => ({
+            id: p._id,
+            shopId: p.supplierId?.code ?? "",
+            shopLabel: p.supplierId?.shopName,
+            shopArea: p.supplierId?.barangay,
+            date: p.scheduledDate,
+            time: p.scheduledTime,
+            recurrence: (p.frequency === "none" ? "none" : p.frequency) ?? "none",
+            stage: p.status === "collected" ? "collected" : "scheduled",
+            estSacks: 0,
+            sacks: p.sacks || 0,
+          })),
+        ),
+      )
+      .catch(() => setPickups([]))
+      .finally(() => setLoading(false));
+  }, []);
+  return { pickups, loading };
+}
+
+type ActivePickup = Pickup & { shopLabel?: string; shopArea?: string };
 
 export function InventoryContent() {
   const { logs = [], loading } = useInventory();
+  const { pickups, loading: loadingPickups } = useActivePickups();
   const canEdit = useCan("inventory:edit");
 
   const { suppliers } = useSuppliers();
@@ -58,9 +92,13 @@ export function InventoryContent() {
   }
 
   const stock = stockSummary(logs, []);
+  // Collected but not yet delivered to the site.
+  const awaiting = pickups
+    .filter((p) => p.stage === "collected")
+    .reduce((sum, p) => sum + (p.sacks ?? 0), 0);
 
-  const dueToday: Pickup[] = [];
-  const toCollect = 0;
+  const dueToday = pickups.filter((p) => p.date === TODAY);
+  const toCollect = dueToday.filter((p) => p.stage === "scheduled").length;
   const rejectionRate =
     stock.received30 + stock.rejected30 > 0
       ? (stock.rejected30 / (stock.received30 + stock.rejected30)) * 100
@@ -96,14 +134,18 @@ export function InventoryContent() {
           />
           <SummaryCard
             label="Awaiting delivery"
-            value={fmtSacks(stock.awaiting)}
+            value={fmtSacks(awaiting)}
             note="Collected, not yet at the site"
           />
           <SummaryCard
             label="Pickups today"
             value={String(dueToday.length)}
             note={
-              toCollect > 0 ? `${toCollect} still to collect` : "All collected"
+              dueToday.length === 0
+                ? "None scheduled today"
+                : toCollect > 0
+                  ? `${toCollect} still to collect`
+                  : "All collected"
             }
           />
           <SummaryCard
@@ -120,7 +162,12 @@ export function InventoryContent() {
           subtitle="Per week, last 6 weeks"
           volumes={volumeByPeriod(logs, "weekly")}
         />
-        <UpcomingPickups pickups={[]} shopName={shopName} shopArea={shopArea} />
+        <UpcomingPickups
+          pickups={pickups}
+          loading={loadingPickups}
+          shopName={shopName}
+          shopArea={shopArea}
+        />
       </section>
 
       <LatestLog logs={logs} shopName={shopName} />
@@ -130,15 +177,18 @@ export function InventoryContent() {
 
 function UpcomingPickups({
   pickups,
+  loading,
   shopName,
   shopArea,
 }: {
-  pickups: Pickup[];
+  pickups: ActivePickup[];
+  loading: boolean;
   shopName: (id?: string) => string;
   shopArea: (id?: string) => string;
 }) {
+  // Not yet delivered: overdue ones first (oldest date), then today and later.
   const upcoming = pickups
-    .filter((p) => p.stage !== "delivered" && p.date >= TODAY)
+    .filter((p) => p.stage !== "delivered")
     .sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`))
     .slice(0, 5);
 
@@ -146,14 +196,18 @@ function UpcomingPickups({
     <article className="flex flex-col rounded-xl border bg-card">
       <div className="flex items-center justify-between gap-3 border-b px-4 py-3 md:px-5">
         <h3 className="text-base font-medium">Upcoming pickups</h3>
-        <InventoryLink
-          href={inventoryHref("stock")}
+        <SupplierLink
+          href="/suppliers/tracking"
           className="text-sm text-muted-foreground hover:text-foreground"
         >
           Track
-        </InventoryLink>
+        </SupplierLink>
       </div>
-      {upcoming.length === 0 ? (
+      {loading ? (
+        <div className="px-4 py-10">
+          <LeafLoader label="Loading pickups" />
+        </div>
+      ) : upcoming.length === 0 ? (
         <p className="px-4 py-10 text-center text-sm text-muted-foreground">
           No upcoming pickups.
         </p>
@@ -166,11 +220,16 @@ function UpcomingPickups({
             >
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">
-                  {shopName(p.shopId)}
+                  {p.shopLabel ?? shopName(p.shopId)}
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
-                  {formatDate(p.date)}, {formatTime(p.time)} ·{" "}
-                  {shopArea(p.shopId)}
+                  {p.date < TODAY ? (
+                    <span className="font-medium text-destructive">Overdue · </span>
+                  ) : p.date === TODAY ? (
+                    <span className="font-medium text-foreground">Today · </span>
+                  ) : null}
+                  {formatDate(p.date)}, {p.time ? formatTime(p.time) : "—"}
+                  {(p.shopArea ?? shopArea(p.shopId)) ? ` · ${p.shopArea ?? shopArea(p.shopId)}` : ""}
                 </p>
               </div>
               <StageBadge stage={p.stage} />

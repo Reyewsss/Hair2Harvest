@@ -1,6 +1,6 @@
 import { API_BASE } from "@/lib/api";
 import { useMemo, useState } from "react";
-import { FileText, Plus, Search, Trash2 } from "lucide-react";
+import { Check, FileText, Globe, Plus, Search, ShieldCheck, Trash2, X } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import {
   InputGroup,
@@ -21,7 +21,7 @@ import {
   frequencyLabel,
   frequencyOptions,
   type PickupFrequency,
-  type SupplierStatus,
+  type Supplier,
   windowLabel,
 } from "../data/suppliers-data";
 import { useCan } from "@/features/auth/access";
@@ -43,10 +43,11 @@ import {
   validateFile,
 } from "@/lib/upload-validation";
 import { LeafLoader } from "@/shared/ui/leaf-loader";
+import { formatDate } from "@/features/inventory/data/inventory-data";
+import { approveShop, missingInfo, rejectShop } from "../components/review-panel";
 
 // Consent PDFs are private; the API streams them only to logged-in users.
 
-type StatusFilter = "all" | SupplierStatus;
 type FrequencyFilter = "all" | PickupFrequency;
 type View = "list" | "map";
 
@@ -56,10 +57,10 @@ const viewOptions: { value: View; label: string }[] = [
 ];
 
 export function SuppliersContent() {
-  const { suppliers, addSupplier, deleteSupplier, loading } = useSuppliers();
+  const { suppliers, addSupplier, deleteSupplier, reviewSupplier, loading } = useSuppliers();
   const canEdit = useCan("suppliers:edit");
+  const canApprove = useCan("suppliers:approve");
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState<StatusFilter>("all");
   const [frequency, setFrequency] = useState<FrequencyFilter>("all");
   const [view, setView] = useState<View>("list");
   const [registering, setRegistering] = useState(false);
@@ -69,7 +70,6 @@ export function SuppliersContent() {
     const query = search.trim().toLowerCase();
     return suppliers.filter(
       (s) =>
-        (status === "all" || s.status === status) &&
         (frequency === "all" || s.frequency === frequency) &&
         (query === "" ||
           s.shopName.toLowerCase().includes(query) ||
@@ -78,7 +78,15 @@ export function SuppliersContent() {
           (s.street || "").toLowerCase().includes(query) ||
           (s.unit && s.unit.toLowerCase().includes(query))),
     );
-  }, [suppliers, search, status, frequency]);
+  }, [suppliers, search, frequency]);
+
+  // Three lists: enrolled partners, candidates waiting for review, and rejected shops.
+  const enrolled = rows.filter((s) => s.status === "enrolled");
+  const candidates = rows.filter((s) => s.status !== "enrolled" && s.review !== "rejected");
+  const rejected = rows.filter((s) => s.status !== "enrolled" && s.review === "rejected");
+  const filtered = search.trim() !== "" || frequency !== "all";
+  const review = (s: Supplier) => (status: "approved" | "rejected", remarks?: string) =>
+    reviewSupplier(s.id, status, remarks);
 
   const handleRegister = async (formData: FormData) => {
     const shopName = String(formData.get("shopName") ?? "").trim();
@@ -231,15 +239,6 @@ export function SuppliersContent() {
             />
           </InputGroup>
           <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
-            <SegmentedTabs<StatusFilter>
-              value={status}
-              onChange={setStatus}
-              options={[
-                { value: "all", label: `All (${suppliers.length})` },
-                { value: "enrolled", label: "Enrolled" },
-                { value: "candidate", label: "Candidate" },
-              ]}
-            />
             <FilterDropdown<FrequencyFilter>
               value={frequency}
               onChange={setFrequency}
@@ -259,6 +258,12 @@ export function SuppliersContent() {
         {view === "map" ? (
           <SupplierPinMap suppliers={rows} />
         ) : (
+          <>
+          <SectionHeading
+            title="Enrolled shops"
+            count={enrolled.length}
+            note="Approved partners. Pickups can be scheduled for these shops."
+          />
           <Table className="min-w-215">
             <colgroup>
               <col className="w-[16%]" />
@@ -283,17 +288,19 @@ export function SuppliersContent() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.length === 0 ? (
+              {enrolled.length === 0 ? (
                 <TableRow>
                   <TableCell
                     colSpan={8}
                     className="py-10 text-center text-muted-foreground"
                   >
-                    No shops match your search or filters.
+                    {filtered
+                      ? "No enrolled shops match your search or filters."
+                      : "No enrolled shops yet."}
                   </TableCell>
                 </TableRow>
               ) : (
-                rows.map((s) => (
+                enrolled.map((s) => (
                   <TableRow key={s.id}>
                     <TableCell className="whitespace-normal">
                       <SupplierLink
@@ -323,7 +330,7 @@ export function SuppliersContent() {
                       {s.phone}
                     </TableCell>
                     <TableCell>
-                      <StatusBadge status={s.status} />
+                      <StatusBadge status={s.status} review={s.review} />
                     </TableCell>
                     <TableCell>
                       {s.consentDocument ? (
@@ -357,6 +364,41 @@ export function SuppliersContent() {
               )}
             </TableBody>
           </Table>
+
+          <SectionHeading
+            icon={<ShieldCheck className="size-5 text-primary" />}
+            title="Candidates"
+            count={candidates.length}
+            note="Waiting for an admin to check and approve before they are enrolled."
+          />
+          <ReviewTable
+            shops={candidates}
+            kind="candidate"
+            canApprove={canApprove}
+            canEdit={canEdit}
+            onApprove={(s) => approveShop(s, review(s))}
+            onReject={(s) => rejectShop(s, review(s))}
+            onDelete={(s) => handleDelete(s.id, s.shopName)}
+            empty={filtered ? "No candidates match your search or filters." : "No shops waiting for approval."}
+          />
+
+          <SectionHeading
+            icon={<X className="size-5 text-destructive" />}
+            title="Rejected"
+            count={rejected.length}
+            note="Turned down during review. They can still be approved later."
+          />
+          <ReviewTable
+            shops={rejected}
+            kind="rejected"
+            canApprove={canApprove}
+            canEdit={canEdit}
+            onApprove={(s) => approveShop(s, review(s))}
+            onReject={(s) => rejectShop(s, review(s))}
+            onDelete={(s) => handleDelete(s.id, s.shopName)}
+            empty={filtered ? "No rejected shops match your search or filters." : "No rejected shops."}
+          />
+          </>
         )}
         <p className="text-sm text-muted-foreground">
           Showing {rows.length} of {suppliers.length} shop
@@ -377,5 +419,168 @@ export function SuppliersContent() {
         />
       </Drawer>
     </div>
+  );
+}
+
+function SectionHeading({
+  title,
+  count,
+  note,
+  icon,
+}: {
+  title: string;
+  count: number;
+  note: string;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <div className="mt-4 flex items-start gap-2 first:mt-0">
+      {icon ? <span className="mt-1">{icon}</span> : null}
+      <div className="space-y-1">
+        <h2 className="flex items-center gap-2 text-lg font-medium">
+          {title}
+          <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">
+            {count}
+          </span>
+        </h2>
+        <p className="text-sm text-muted-foreground">{note}</p>
+      </div>
+    </div>
+  );
+}
+
+const sourceLabel = (s: Supplier) =>
+  s.registrationSource === "web" ? "Website" : s.registrationSource === "admin" ? "Admin" : "Self sign-up";
+
+function ReviewTable({
+  shops,
+  kind,
+  canApprove,
+  canEdit,
+  onApprove,
+  onReject,
+  onDelete,
+  empty,
+}: {
+  shops: Supplier[];
+  kind: "candidate" | "rejected";
+  canApprove: boolean;
+  canEdit: boolean;
+  onApprove: (s: Supplier) => void;
+  onReject: (s: Supplier) => void;
+  onDelete: (s: Supplier) => void;
+  empty: string;
+}) {
+  return (
+    <Table className="min-w-215">
+      <colgroup>
+        <col className="w-[18%]" />
+        <col className="w-[13%]" />
+        <col className="w-[19%]" />
+        <col className="w-[12%]" />
+        <col className="w-[12%]" />
+        <col className="w-[13%]" />
+        <col className="w-[13%]" />
+      </colgroup>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Shop</TableHead>
+          <TableHead>Owner</TableHead>
+          <TableHead>Address</TableHead>
+          <TableHead>Contact</TableHead>
+          <TableHead>Registered</TableHead>
+          <TableHead>{kind === "rejected" ? "Reason" : "To check"}</TableHead>
+          <TableHead>Actions</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {shops.length === 0 ? (
+          <TableRow>
+            <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+              {empty}
+            </TableCell>
+          </TableRow>
+        ) : (
+          shops.map((s) => {
+            const missing = missingInfo(s);
+            // Admin-registered shops are verified on entry; they enroll by recording consent.
+            const reviewable = s.registrationSource !== "admin";
+            return (
+              <TableRow key={s.id}>
+                <TableCell className="whitespace-normal">
+                  <SupplierLink
+                    href={`/suppliers/${s.id}`}
+                    className="block truncate font-medium hover:underline"
+                  >
+                    {s.shopName}
+                  </SupplierLink>
+                  <p className="truncate text-xs text-muted-foreground">{s.id}</p>
+                </TableCell>
+                <TableCell>{displayName(s)}</TableCell>
+                <TableCell className="whitespace-normal">
+                  <span className="line-clamp-2">{formatAddress(s) || "—"}</span>
+                </TableCell>
+                <TableCell className="tabular-nums text-muted-foreground">{s.phone || "—"}</TableCell>
+                <TableCell className="whitespace-normal">
+                  <p>{s.registeredAt ? formatDate(s.registeredAt.slice(0, 10)) : "—"}</p>
+                  <p className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                    {s.registrationSource === "web" ? <Globe className="size-3" /> : null}
+                    {sourceLabel(s)}
+                  </p>
+                </TableCell>
+                <TableCell className="whitespace-normal text-sm">
+                  {kind === "rejected" ? (
+                    <span className="line-clamp-2 text-muted-foreground">{s.remarks || "—"}</span>
+                  ) : !reviewable ? (
+                    <span className="text-muted-foreground">Needs consent</span>
+                  ) : missing.length ? (
+                    <span className="text-amber-700 dark:text-amber-400">No {missing.join(", ")}</span>
+                  ) : (
+                    <span className="text-success">Complete</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    {canApprove && reviewable ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => onApprove(s)}
+                          className="inline-flex items-center gap-1 text-sm text-success hover:underline"
+                        >
+                          <Check className="size-4" /> Approve
+                        </button>
+                        {kind === "candidate" ? (
+                          <button
+                            type="button"
+                            onClick={() => onReject(s)}
+                            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground hover:underline"
+                          >
+                            <X className="size-4" /> Reject
+                          </button>
+                        ) : null}
+                      </>
+                    ) : (
+                      <SupplierLink href={`/suppliers/${s.id}`} className="text-sm text-primary hover:underline">
+                        Open
+                      </SupplierLink>
+                    )}
+                    {canEdit ? (
+                      <button
+                        type="button"
+                        onClick={() => onDelete(s)}
+                        className="inline-flex items-center gap-1 text-sm text-destructive hover:underline"
+                      >
+                        <Trash2 className="size-4" /> Remove
+                      </button>
+                    ) : null}
+                  </div>
+                </TableCell>
+              </TableRow>
+            );
+          })
+        )}
+      </TableBody>
+    </Table>
   );
 }

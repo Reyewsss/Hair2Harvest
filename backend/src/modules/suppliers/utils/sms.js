@@ -35,7 +35,16 @@ export async function sendSms(to, message) {
     return { success: false, error: `"${to}" is not a valid PH mobile number` };
   }
 
-  const body = { recipients: [recipient], message };
+  // Keep the text in the plain GSM alphabet: a single "–" or curly quote switches the whole
+  // SMS to Unicode (70 chars/part), turning one text into a 3-part message that some SIMs fail on.
+  const plain = String(message)
+    .replace(/[–—−]/g, "-")
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/…/g, "...")
+    .replace(/[  ]/g, " ");
+
+  const body = { recipients: [recipient], message: plain };
   if (process.env.TEXTBEE_DEVICE_ID?.trim()) body.deviceId = process.env.TEXTBEE_DEVICE_ID.trim();
 
   try {

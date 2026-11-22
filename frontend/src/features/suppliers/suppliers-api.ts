@@ -1,6 +1,10 @@
 import { api, API_BASE } from "@/lib/api";
 import { isFallbackPin, type Supplier } from "./data/suppliers-data";
 
+// Web sign-ups save null coordinates; treat anything non-numeric as "no pin".
+const coord = (v: unknown) =>
+  typeof v === "number" && Number.isFinite(v) ? v : undefined;
+
 export const mapBackendToFrontend = (b: any): Supplier => {
   // 👇 Safely split the owner field if firstName/lastName are missing
   const owner = b.owner || "";
@@ -10,19 +14,19 @@ export const mapBackendToFrontend = (b: any): Supplier => {
 
   return {
     id: b.code || b._id,
-    shopName: b.shopName,
+    shopName: b.shopName || "Unnamed shop",
     firstName, // 👈 Add this
     lastName,  // 👈 Add this
     ownerName: owner, // Keep for backward compatibility
     email: b.email || "",
-    phone: b.phone,
-    barangay: b.barangay,
+    phone: b.phone || "",
+    barangay: b.barangay || "",
     street: b.street || "",
     unit: b.unit || "",
-    lat: b.lat,
-    lng: b.lng,
+    lat: coord(b.lat),
+    lng: coord(b.lng),
     // Older records have no flag; a pin exactly on the old fallback point is approximate too.
-    pinApproximate: Boolean(b.pinApproximate) || isFallbackPin(b.lat, b.lng),
+    pinApproximate: Boolean(b.pinApproximate) || isFallbackPin(coord(b.lat), coord(b.lng)),
     frequency: b.pickupFrequency === "biweekly" ? "twice-weekly" : b.pickupFrequency,
     windowStart: b.operatingHours?.open || "09:00",
     windowEnd: b.operatingHours?.close || "18:00",
@@ -34,6 +38,12 @@ export const mapBackendToFrontend = (b: any): Supplier => {
     registrationSource: b.registrationSource,
     consentAgreedBy: b.consent?.agreedBy,
     status: b.status === "approved" ? "enrolled" : "candidate",
+    review: b.status,
+    remarks: b.remarks || undefined,
+    registeredAt: b.createdAt,
+    lastReminder: b.lastReminder?.at
+      ? { at: b.lastReminder.at, message: b.lastReminder.message || "" }
+      : undefined,
     hairType: "untreated",
     history: [],
   };

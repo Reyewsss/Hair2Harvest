@@ -12,8 +12,8 @@ import { STAGES, type BatchStage } from "@/features/composting/data/composting-d
  *   Aeration (motor running) helps; mixing cools it briefly; too dry / too wet
  *   slows the microbes.
  * - Moisture evaporates faster when hot; "Add water" raises it.
- * - The batch is measured in sacks (as taken from inventory) and composts down with
- *   microbial activity (≈25% over the composting stage).
+ * - The batch is measured in kg. Inventory is counted in sacks, so starting a batch
+ *   deducts ceil(kg ÷ KG_PER_SACK) sacks. Weight drops with microbial activity.
  * - Stages advance on their own after their duration; completed batches free
  *   the machine.
  * - Safety: > 72 °C trips an overheat fault; opening the lid while the motor
@@ -49,7 +49,7 @@ export interface SimLog {
   t: number;
   event: string;
   temp: number | null;
-  weight: number | null; // sacks
+  weight: number | null; // kg
   moisture: number | null;
 }
 
@@ -60,8 +60,8 @@ export interface SimBatch {
   operator: string;
   /** Raw-hair sacks taken from inventory for this batch. */
   sacks?: number;
-  initialWeight: number; // sacks loaded
-  weight: number; // sacks remaining as it composts down
+  initialWeight: number; // kg loaded
+  weight: number; // kg remaining as it composts down
   moisture: number;
   temp: number;
   stage: BatchStage;
@@ -108,7 +108,12 @@ const OVERHEAT_C = 72;
 const MIX_SECONDS = 30 * 60;
 const SAMPLE_EVERY = 6 * HOUR;
 const HISTORY_POINTS = 60;
-const STORAGE_KEY = "h2h-sim-v2"; // v2: batches measured in sacks
+const STORAGE_KEY = "h2h-sim-v3"; // v3: batch input in kg (inventory still in sacks)
+
+/** Standard raw-hair sack weight used to turn a kg compost input into inventory sacks. */
+export const KG_PER_SACK = 5;
+/** Sacks to take from inventory for `kg` of raw hair (a partly used sack counts as one). */
+export const sacksForKg = (kg: number) => Math.ceil(kg / KG_PER_SACK);
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
@@ -127,8 +132,8 @@ function seed(): SimState {
     recipe: "v1.2",
     operator: "Simulator",
     sacks: 12,
-    initialWeight: 12,
-    weight: 11.2,
+    initialWeight: 60,
+    weight: 56,
     moisture: 56,
     temp: 58.5,
     stage: "composting",
@@ -136,8 +141,8 @@ function seed(): SimState {
     createdAt: started,
     lastSampleAt: now,
     logs: [
-      { t: now - ms(3 * DAY), event: "Stage → composting", temp: 33.1, weight: 12, moisture: 60 },
-      { t: started, event: "Batch created (test)", temp: AMBIENT, weight: 12, moisture: 60 },
+      { t: now - ms(3 * DAY), event: "Stage → composting", temp: 33.1, weight: 60, moisture: 60 },
+      { t: started, event: "Batch created (test)", temp: AMBIENT, weight: 60, moisture: 60 },
     ],
   };
   return {
@@ -455,21 +460,22 @@ export const sim = {
     return !!m && !m.batchId;
   },
 
-  /** Starts a test batch from `sacks` of raw hair. The caller deducts
-   *  the sacks from inventory first; see composting-content.tsx. */
-  createBatch: (input: { machineId: string; sacks: number; recipe: string; operator: string }) => {
+  /** Starts a test batch from `kg` of raw hair. The caller deducts sacksForKg(kg)
+   *  sacks from inventory first; see composting-content.tsx. */
+  createBatch: (input: { machineId: string; kg: number; recipe: string; operator: string }) => {
     const m = state.machines.find((x) => x.id === input.machineId);
     if (!m || m.batchId) throw new Error("That test machine already has a batch.");
-    if (!Number.isInteger(input.sacks) || input.sacks < 1) throw new Error("Enter at least 1 sack.");
+    if (!(input.kg > 0)) throw new Error("Enter the raw-hair weight in kg.");
+    const sacks = sacksForKg(input.kg);
     const id = sim.nextBatchId();
     const batch: SimBatch = {
       id,
       machineId: m.id,
       recipe: input.recipe,
       operator: input.operator,
-      sacks: input.sacks,
-      initialWeight: input.sacks,
-      weight: input.sacks,
+      sacks,
+      initialWeight: input.kg,
+      weight: input.kg,
       moisture: 60,
       temp: AMBIENT,
       stage: "preparation",
@@ -479,9 +485,9 @@ export const sim = {
       logs: [
         {
           t: state.clock,
-          event: `Batch created by ${input.operator}: ${input.sacks} sack${input.sacks === 1 ? "" : "s"} from inventory`,
+          event: `Batch created by ${input.operator}: ${input.kg} kg (${sacks} sack${sacks === 1 ? "" : "s"} from inventory)`,
           temp: AMBIENT,
-          weight: input.sacks,
+          weight: input.kg,
           moisture: 60,
         },
       ],

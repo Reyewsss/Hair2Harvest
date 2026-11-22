@@ -6,7 +6,7 @@ export const ROLES = ["admin", "operator", "staff"];
 export const OTP_ROLES = ["admin", "operator"];
 
 const matrix = {
-  admin: ["accounts:manage", "suppliers:edit", "inventory:edit"],
+  admin: ["accounts:manage", "suppliers:edit", "suppliers:approve", "inventory:edit"],
   operator: ["suppliers:edit", "inventory:edit"],
   staff: [], // read-only access to inventory and suppliers
 };

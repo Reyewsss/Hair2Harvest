@@ -21,6 +21,7 @@ import {
 } from "./pickupModule/pickupController.js";
 import { verifyToken } from "../auth/middleware/verifyToken.js";
 import { upload } from "./uploadConfig.js";
+import { requirePermission } from "../auth/middleware/authorize.js";
 
 const router = express.Router();
 router.use(verifyToken);
@@ -39,7 +40,7 @@ router.get("/:id/consent", getConsentDocument);
 router.get("/:id", getSupplier);
 router.post("/", upload.single("consentDocument"), createSupplier);
 router.patch("/:id", updateSupplier);
-router.patch("/:id/review", reviewSupplier);
+router.patch("/:id/review", requirePermission("suppliers:approve"), reviewSupplier);
 router.delete("/:id", deleteSupplier);
 router.post("/:id/send-reminder", sendReminder);
 

@@ -41,7 +41,6 @@ import {
   InputGroupInput,
 } from "@/shared/ui/input-group.tsx";
 import {
-  batchTemperature,
   dateRangeOptions,
   roleConfig,
   streamTables,
@@ -63,6 +62,7 @@ import {
 } from "@/features/suppliers/components/pickup-ui";
 import { AnimatedNumber } from "@/shared/ui/animated-number";
 import { LeafLoader } from "@/shared/ui/leaf-loader";
+import { KG_PER_SACK, useSimulation } from "@/features/simulation/sim-store";
 
 const PAGE_SIZE = 10;
 
@@ -98,6 +98,8 @@ export function DashboardContent({ role = "admin" }: { role?: Role }) {
   }, [user?.role, hasConfig, effectiveRole]);
 
   const [data, setData] = useState<OverviewData | null>(null);
+  const sim = useSimulation();
+  const activeBatches = sim.batches.filter((b) => b.machineId && b.stage !== "completed");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -127,8 +129,10 @@ export function DashboardContent({ role = "admin" }: { role?: Role }) {
     batches: {
       id: "batches",
       label: "Active Batches",
-      value: "0",
-      footnote: "No data yet",
+      value: String(activeBatches.length),
+      footnote: activeBatches.length
+        ? `${activeBatches.filter((b) => b.stage === "composting").length} composting · test machines`
+        : "No batch running",
     },
     materials: {
       id: "materials",
@@ -139,9 +143,14 @@ export function DashboardContent({ role = "admin" }: { role?: Role }) {
     machines: {
       id: "machines",
       label: "Machine Status",
-      value: "0 of 0",
-      footnote: "No machines connected",
-      segments: [] as MachineState[],
+      value: `${sim.machines.filter((m) => m.motor === "running" || m.motor === "mixing").length} of ${sim.machines.length}`,
+      footnote: (() => {
+        const faults = sim.machines.filter((m) => m.motor === "fault").length;
+        return faults ? `${faults} fault${faults === 1 ? "" : "s"} · running` : "running (test machines)";
+      })(),
+      segments: sim.machines.map((m): MachineState =>
+        m.motor === "fault" || !m.online ? "maint" : m.motor === "stopped" ? "idle" : "run",
+      ),
     },
     experiments: {
       id: "experiments",
@@ -152,29 +161,31 @@ export function DashboardContent({ role = "admin" }: { role?: Role }) {
     },
   };
 
-  // 👇 DYNAMIC CHART MATH TO PREVENT OVERFLOW
-  const maxVal = Math.max(100, ...(data?.trend.map((d) => d.value) ?? [0]));
-  const yMax = Math.ceil(maxVal / 50) * 50; // Round up to nearest 50
-  const step = yMax / 4;
-  const ticks = [0, step, step * 2, step * 3, yMax];
-
+  // Collected volume: sacks received into inventory per day (from the backend).
+  const trend = data?.trend ?? [];
+  const totalSacks = trend.reduce((sum, d) => sum + d.value, 0);
+  const volMax = niceMax(Math.max(4, ...trend.map((d) => d.value)));
   const volumeChart: ChartSeries = {
     title: "Collected Volume",
-    subtitle: "Daily, last 7 days",
-    summary: loading
-      ? "..."
-      : `${(data?.trend.reduce((s, d) => s + d.value, 0) ?? 0).toLocaleString()} kg`,
-    summaryNote: "total collected",
+    subtitle: "Sacks received per day, last 7 days",
+    summary: loading ? "..." : `${totalSacks.toLocaleString()} sack${totalSacks === 1 ? "" : "s"}`,
+    summaryNote: loading ? "total collected" : `≈ ${(totalSacks * KG_PER_SACK).toLocaleString()} kg collected`,
     type: "bar",
-    unit: "kg",
+    unit: "sacks",
     yMin: 0,
-    yMax: yMax, // 👈 Use dynamic max
-    ticks: ticks, // 👈 Use dynamic ticks
-    data: data?.trend ?? [],
+    yMax: volMax,
+    ticks: [0, volMax / 4, volMax / 2, (volMax * 3) / 4, volMax],
+    data: trend,
   };
 
+  // Batch temperature: live readings from the machine running the active batch.
+  const tempBatch =
+    activeBatches.find((b) => b.stage === "composting") ?? activeBatches[0];
+  const tempMachine = sim.machines.find((m) => m.id === tempBatch?.machineId);
+  const temperatureChart = buildTemperatureChart(tempBatch?.id, tempMachine, sim.clock, sim.speed);
+
   const charts: ChartSeries[] = config.charts.map((id) =>
-    id === "volume" ? volumeChart : batchTemperature,
+    id === "volume" ? volumeChart : temperatureChart,
   );
 
   return (
@@ -370,6 +381,69 @@ function MetricCardItem({ metric }: { metric: MetricCard }) {
  * Trends Section (Charts)
  * ───────────────────────────────────────────────────────────────────── */
 
+/** Rounds a chart maximum up to 1/2/5 × 10ⁿ, divisible into 4 even ticks. */
+function niceMax(v: number) {
+  const pow = 10 ** Math.floor(Math.log10(v));
+  const n = v / pow;
+  const m = n <= 1 ? 1 : n <= 2 ? 2 : n <= 4 ? 4 : n <= 8 ? 8 : 10;
+  return m * pow;
+}
+
+const TEMP_POINTS = 12;
+
+function buildTemperatureChart(
+  batchId: string | undefined,
+  machine: { name: string; temp: number; tempHistory: number[]; online: boolean } | undefined,
+  clock: number,
+  speed: number,
+): ChartSeries {
+  const base = {
+    title: "Batch Temperature",
+    type: "line" as const,
+    unit: "°C",
+    band: { min: 55, max: 65, label: "Target 55–65 °C" },
+  };
+  if (!batchId || !machine) {
+    return {
+      ...base,
+      subtitle: "No active batch. Start one in Compost.",
+      summary: "—",
+      summaryNote: "current",
+      yMin: 20,
+      yMax: 80,
+      ticks: [20, 40, 60, 80],
+      data: [],
+    };
+  }
+  // Evenly sample the machine's recent readings (one per real second of the sim).
+  const hist = machine.tempHistory;
+  const every = Math.max(1, Math.floor(hist.length / TEMP_POINTS));
+  const idx: number[] = [];
+  for (let i = hist.length - 1; i >= 0 && idx.length < TEMP_POINTS; i -= every) idx.unshift(i);
+  const data = idx.map((i) => {
+    const t = new Date(clock - (hist.length - 1 - i) * speed * 1000);
+    return {
+      label: t.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
+      value: hist[i],
+    };
+  });
+  const values = data.map((d) => d.value);
+  const yMin = Math.min(50, Math.floor((Math.min(...values) - 2) / 10) * 10);
+  const yMax = Math.max(80, Math.ceil((Math.max(...values) + 2) / 10) * 10);
+  const step = (yMax - yMin) / 3;
+  return {
+    ...base,
+    subtitle: `Batch ${batchId} on ${machine.name}${machine.online ? "" : " · sensor offline"}`,
+    summary: `${machine.temp.toFixed(1)} °C`,
+    summaryNote: "current",
+    live: machine.online,
+    yMin,
+    yMax,
+    ticks: [yMin, yMin + step, yMin + 2 * step, yMax].map((t) => Math.round(t)),
+    data,
+  };
+}
+
 function TrendsSection({ charts }: { charts: ChartSeries[] }) {
   return (
     <section className="flex flex-col gap-4">
@@ -420,6 +494,11 @@ function TrendCard({ chart }: { chart: ChartSeries }) {
         </div>
       </div>
 
+      {n === 0 ? (
+        <div className="mt-6 grid h-52 place-items-center rounded-lg border border-dashed text-sm text-muted-foreground">
+          No readings yet
+        </div>
+      ) : (
       <div className="mt-6 flex gap-3">
         <div className="relative h-52 w-10 shrink-0">
           {ticks.map((t) => (
@@ -462,9 +541,9 @@ function TrendCard({ chart }: { chart: ChartSeries }) {
                 className="absolute inset-0 grid items-end gap-2 px-1 md:gap-3"
                 style={cols}
               >
-                {data.map((d) => (
+                {data.map((d, i) => (
                   <div
-                    key={d.label}
+                    key={i}
                     title={`${d.label}: ${d.value.toLocaleString()} ${unit}`}
                     style={{ height: `${pct(d.value)}%` }}
                     className="rounded-t-md bg-primary transition-opacity hover:opacity-80"
@@ -495,7 +574,7 @@ function TrendCard({ chart }: { chart: ChartSeries }) {
                 </svg>
                 {data.map((d, i) => (
                   <span
-                    key={d.label}
+                    key={i}
                     title={`${d.label}: ${d.value} ${unit}`}
                     style={{ left: `${x(i)}%`, bottom: `${pct(d.value)}%` }}
                     className="absolute size-2.5 -translate-x-1/2 translate-y-1/2 rounded-full bg-primary ring-2 ring-card"
@@ -511,7 +590,7 @@ function TrendCard({ chart }: { chart: ChartSeries }) {
           >
             {data.map((d, i) => (
               <span
-                key={d.label}
+                key={i}
                 className={type === "line" && n > 7 && i % 2 ? "invisible" : ""}
               >
                 {d.label}
@@ -520,6 +599,7 @@ function TrendCard({ chart }: { chart: ChartSeries }) {
           </div>
         </div>
       </div>
+      )}
     </article>
   );
 }

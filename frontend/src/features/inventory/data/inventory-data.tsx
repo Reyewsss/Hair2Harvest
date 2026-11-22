@@ -1,8 +1,7 @@
 // Sample data and helpers for the Inventory tab. Replace with API data later.
 
-// Fixed "today" so the sample data always lines up. With real data use:
-// new Date().toISOString().slice(0, 10)
-export const TODAY = "2026-11-02";
+// Today's date in the Philippines (YYYY-MM-DD), matching the dates the backend stores.
+export const TODAY = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
 // Batch that newly delivered hair is assigned to.
 export const OPEN_BATCH = "B-0143";
 

@@ -4,12 +4,16 @@ import type { ContaminationGrade, HairType, SupplierStatus } from "../data/suppl
 // Generic form and filter pieces are shared with the Inventory feature.
 export { FilterDropdown, SegmentedTabs, Field, Pill, fieldClass } from "@/features/inventory/components/inventory-shared";
 
-export function StatusBadge({ status }: { status: SupplierStatus }) {
-  return status === "enrolled" ? (
-    <Pill className="bg-success/10 text-success">Enrolled</Pill>
-  ) : (
-    <Pill className="bg-secondary text-secondary-foreground">Candidate</Pill>
-  );
+export function StatusBadge({
+  status,
+  review,
+}: {
+  status: SupplierStatus;
+  review?: "pending" | "approved" | "rejected";
+}) {
+  if (status === "enrolled") return <Pill className="bg-success/10 text-success">Enrolled</Pill>;
+  if (review === "rejected") return <Pill className="bg-destructive/10 text-destructive">Rejected</Pill>;
+  return <Pill className="bg-secondary text-secondary-foreground">Candidate</Pill>;
 }
 
 export function HairTypeBadge({ hairType }: { hairType: HairType }) {

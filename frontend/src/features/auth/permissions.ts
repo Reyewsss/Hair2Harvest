@@ -1,7 +1,11 @@
 // Keep this in sync with backend/src/modules/auth/utils/permissions.js.
 // The backend is the real gatekeeper; this file only decides what the UI shows.
 export type Role = "admin" | "operator" | "staff";
-export type Permission = "accounts:manage" | "suppliers:edit" | "inventory:edit";
+export type Permission =
+  | "accounts:manage"
+  | "suppliers:edit"
+  | "suppliers:approve"
+  | "inventory:edit";
 
 export const ROLE_LABELS: Record<Role, string> = {
   admin: "Admin",
@@ -10,7 +14,7 @@ export const ROLE_LABELS: Record<Role, string> = {
 };
 
 const matrix: Record<Role, Permission[]> = {
-  admin: ["accounts:manage", "suppliers:edit", "inventory:edit"],
+  admin: ["accounts:manage", "suppliers:edit", "suppliers:approve", "inventory:edit"],
   operator: ["suppliers:edit", "inventory:edit"],
   staff: [], // read-only
 };

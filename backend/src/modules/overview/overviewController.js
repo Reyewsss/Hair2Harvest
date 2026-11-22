@@ -1,6 +1,7 @@
 import { User } from "../auth/authModel.js";
 import Supplier from "../suppliers/supplierModel.js";
 import { Pickup } from "../suppliers/pickupModule/pickupModel.js";
+import { WeightLog } from "../inventory/inventoryModel.js";
 
 export async function getDashboardData(req, res) {
   try {
@@ -33,43 +34,25 @@ export async function getDashboardData(req, res) {
     // 3. Fetch User Data (Staff/Operators)
     const totalStaff = await User.countDocuments({ role: "staff", isActive: true });
 
-    // 4. Build the 7-day trend
-    // We calculate the date 7 days ago
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(now.getDate() - 7);
-    const startDate = sevenDaysAgo.toISOString().slice(0, 10);
-
-    // Aggregate collected weight per day
-    const trendData = await Pickup.aggregate([
-      {
-        $match: {
-          status: "delivered",
-          deliveredAt: { $gte: sevenDaysAgo },
-        },
-      },
-      {
-        $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$deliveredAt" } },
-          totalWeight: { $sum: "$weightKg" },
-        },
-      },
-      { $sort: { _id: 1 } },
-    ]);
-
-    // Format trendData into an array of 7 days (fill missing days with 0)
-    const chartData = [];
+    // 4. 7-day trend: raw-hair sacks received into inventory per day (Manila dates,
+    //    the same YYYY-MM-DD strings the inventory logs use).
+    const manilaDay = (d) => d.toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
+    const days = [];
     for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().slice(0, 10);
-      const dayLabel = d.toLocaleDateString("en-US", { weekday: "short" });
-      
-      const found = trendData.find((t) => t._id === dateStr);
-      chartData.push({
-        label: dayLabel,
-        value: found ? found.totalWeight : 0,
+      const d = new Date(now.getTime() - i * 86_400_000);
+      days.push({
+        date: manilaDay(d),
+        label: d.toLocaleDateString("en-US", { weekday: "short", timeZone: "Asia/Manila" }),
       });
     }
+    const received = await WeightLog.aggregate([
+      { $match: { type: "in", date: { $gte: days[0].date, $lte: days[6].date } } },
+      { $group: { _id: "$date", sacks: { $sum: "$sacks" } } },
+    ]);
+    const chartData = days.map(({ date, label }) => ({
+      label,
+      value: received.find((r) => r._id === date)?.sacks ?? 0,
+    }));
 
     res.status(200).json({
       suppliers: {
@@ -86,7 +69,7 @@ export async function getDashboardData(req, res) {
       staff: {
         total: totalStaff,
       },
-      trend: chartData, // Array of { label: "Mon", value: 120 }
+      trend: chartData, // [{ label: "Mon", value: <sacks received> }]
     });
   } catch (error) {
     console.error("Overview API Error:", error);

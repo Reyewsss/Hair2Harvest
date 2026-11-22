@@ -52,6 +52,10 @@ export interface Supplier extends SupplierInput {
   hairType: HairType;
   history: SupplierPickup[];
   lastReminder?: { at: string; message: string };
+  /** Backend review state: web sign-ups wait as "pending" until an admin approves. */
+  review?: "pending" | "approved" | "rejected";
+  remarks?: string;
+  registeredAt?: string;
 }
 
 export type NewPickupInput = Omit<SupplierPickup, "id">;
@@ -95,7 +99,7 @@ export const windowLabel = (
 ) => `${formatTime(s.windowStart)} – ${formatTime(s.windowEnd)}`;
 
 export const hasPin = (s: Pick<SupplierInput, "lat" | "lng">) =>
-  s.lat !== undefined && s.lng !== undefined;
+  Number.isFinite(s.lat) && Number.isFinite(s.lng);
 
 // Barangay-centre fallback the backend used when it couldn't place an address.
 const FALLBACK_PIN = { lat: 14.7289, lng: 121.0375 };
