@@ -20,6 +20,8 @@ const findSupplier = (identifier) =>
       : { code: identifier },
   ).populate("reviewedBy", "name");
 
+// The form sends the pin shown on its map (auto-located or dragged) with
+// pinManuallySet = "true". Only without one does the server geocode the street itself.
 function getManualPin(body) {
   const lat = parseFloat(body.lat);
   const lng = parseFloat(body.lng);
@@ -181,6 +183,7 @@ export async function createSupplier(req, res) {
       unit: unit?.trim() || undefined,
       lat: geo.lat,
       lng: geo.lng,
+      pinApproximate: manualPin ? false : Boolean(geo.approximate),
       operatingHours: JSON.parse(
         operatingHours || '{"days":"Mon-Sat","open":"09:00","close":"18:00"}',
       ),
@@ -277,6 +280,7 @@ export async function updateSupplier(req, res) {
     if (manualPin) {
       patch.lat = manualPin.lat;
       patch.lng = manualPin.lng;
+      patch.pinApproximate = false;
       pinChangedByAdmin = true;
     } else {
       const addressChanged =
@@ -290,6 +294,7 @@ export async function updateSupplier(req, res) {
         });
         patch.lat = geo.lat;
         patch.lng = geo.lng;
+        patch.pinApproximate = Boolean(geo.approximate);
       }
     }
 

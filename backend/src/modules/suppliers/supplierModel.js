@@ -44,6 +44,8 @@ const supplierSchema = new mongoose.Schema(
     unit: { type: String, trim: true },
     lat: { type: Number },
     lng: { type: Number },
+    // true when no real location was found and the pin is the barangay centre
+    pinApproximate: { type: Boolean, default: false },
 
     // ─── Operations ────────────────────────────────────────────────────
     operatingHours: { type: operatingHoursSchema, required: true },

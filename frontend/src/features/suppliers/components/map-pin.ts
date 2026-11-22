@@ -19,9 +19,11 @@ type PinOptions = {
   focused?: boolean;
   /** Width in px; height follows the 40:52 shape. */
   size?: number;
+  /** Location not confirmed: outlined pin with a "?" instead of a solid one. */
+  approximate?: boolean;
 };
 
-export function makePin({ color = PIN_COLORS.enrolled, focused = false, size }: PinOptions = {}) {
+export function makePin({ color = PIN_COLORS.enrolled, focused = false, size, approximate = false }: PinOptions = {}) {
   const w = size ?? (focused ? 38 : 30);
   const h = Math.round((w * 52) / 40);
   return L.divIcon({
@@ -32,10 +34,17 @@ export function makePin({ color = PIN_COLORS.enrolled, focused = false, size }: 
         ${focused ? `<span class="h2h-pin-pulse" style="--pin-color:${color}"></span>` : ""}
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 52" width="${w}" height="${h}"
           style="position:relative;display:block;filter:drop-shadow(0 2px 3px rgba(0,0,0,.3))">
-          <path d="M20 0C8.95 0 0 8.95 0 20c0 14.5 20 32 20 32s20-17.5 20-32C40 8.95 31.05 0 20 0z"
-            fill="${color}" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/>
-          <circle cx="20" cy="19.5" r="7.5" fill="#fff"/>
-          <circle cx="20" cy="19.5" r="3.5" fill="${color}"/>
+          ${
+            approximate
+              ? `<path d="M20 2C10 2 2 10 2 20c0 14 18 30.5 18 30.5S38 34 38 20C38 10 30 2 20 2z"
+                   fill="#fff" stroke="${color}" stroke-width="3" stroke-dasharray="5 3.5" stroke-linejoin="round"/>
+                 <text x="20" y="26" text-anchor="middle" font-family="Poppins, sans-serif" font-size="17"
+                   font-weight="700" fill="${color}">?</text>`
+              : `<path d="M20 0C8.95 0 0 8.95 0 20c0 14.5 20 32 20 32s20-17.5 20-32C40 8.95 31.05 0 20 0z"
+                   fill="${color}" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/>
+                 <circle cx="20" cy="19.5" r="7.5" fill="#fff"/>
+                 <circle cx="20" cy="19.5" r="3.5" fill="${color}"/>`
+          }
         </svg>
       </div>`,
     iconSize: [w, h],

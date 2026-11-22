@@ -8,14 +8,46 @@ import { SupplierLink } from "./supplier-link.tsx";
 import { StatusBadge } from "./supplier-shared";
 
 // Cache icons: Leaflet re-creates the marker DOM whenever the icon object changes.
-const pinFor = (enrolled: boolean, focused: boolean) =>
-  makePin({ color: enrolled ? PIN_COLORS.enrolled : PIN_COLORS.candidate, focused });
-const ICONS = {
-  enrolled: pinFor(true, false),
-  enrolledFocused: pinFor(true, true),
-  candidate: pinFor(false, false),
-  candidateFocused: pinFor(false, true),
-};
+const ICONS = new Map<string, L.DivIcon>();
+function iconFor(s: Supplier, focused: boolean) {
+  const key = `${s.status}|${focused}|${!!s.pinApproximate}`;
+  let icon = ICONS.get(key);
+  if (!icon) {
+    icon = makePin({
+      color: s.status === "enrolled" ? PIN_COLORS.enrolled : PIN_COLORS.candidate,
+      focused,
+      approximate: s.pinApproximate,
+    });
+    ICONS.set(key, icon);
+  }
+  return icon;
+}
+
+/* Shops on exactly the same coordinates (e.g. several approximate pins on the barangay
+ * centre, or two shops in one building) would hide each other. Fan each group out in a
+ * small circle (~18 m) around the shared point so every shop is visible and clickable. */
+function spreadOverlaps(list: Supplier[]): Map<string, [number, number]> {
+  const groups = new Map<string, Supplier[]>();
+  for (const s of list) {
+    const key = `${s.lat!.toFixed(5)},${s.lng!.toFixed(5)}`;
+    groups.set(key, [...(groups.get(key) ?? []), s]);
+  }
+  const out = new Map<string, [number, number]>();
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      out.set(group[0].id, [group[0].lat!, group[0].lng!]);
+      continue;
+    }
+    const radius = 18 + group.length * 2; // metres
+    group.forEach((s, i) => {
+      const angle = (2 * Math.PI * i) / group.length - Math.PI / 2;
+      const dLat = (radius * Math.sin(angle)) / 111_320;
+      const dLng = (radius * Math.cos(angle)) / (111_320 * Math.cos((s.lat! * Math.PI) / 180));
+      out.set(s.id, [s.lat! + dLat, s.lng! + dLng]);
+    });
+  }
+  return out;
+}
 
 // Auto-fits the viewport and handles re-measuring for animated layouts.
 function FitToPins({ bounds }: { bounds: L.LatLngBoundsExpression | null }) {
@@ -66,12 +98,12 @@ export function SupplierPinMap({ suppliers }: { suppliers: Supplier[] }) {
   );
   const focus = pinned.find((s) => s.id === focusId) ?? null;
 
+  const positions = useMemo(() => spreadOverlaps(pinned), [pinned]);
+  const approximate = useMemo(() => pinned.filter((s) => s.pinApproximate), [pinned]);
+
   const bounds = useMemo<L.LatLngBoundsExpression | null>(
-    () =>
-      pinned.length > 0
-        ? pinned.map((s) => [s.lat!, s.lng!] as [number, number])
-        : null,
-    [pinned],
+    () => (pinned.length > 0 ? pinned.map((s) => positions.get(s.id)!) : null),
+    [pinned, positions],
   );
 
   if (pinned.length === 0) {
@@ -95,6 +127,14 @@ export function SupplierPinMap({ suppliers }: { suppliers: Supplier[] }) {
           <span className="flex items-center gap-1.5">
             <MapPin className="size-3.5" style={{ color: PIN_COLORS.candidate }} /> Candidate
           </span>
+          {approximate.length > 0 ? (
+            <span className="flex items-center gap-1.5">
+              <span className="flex size-3.5 items-center justify-center rounded-full border border-dashed border-current text-[0.55rem] font-bold">
+                ?
+              </span>
+              Approximate
+            </span>
+          ) : null}
         </div>
 
         <MapContainer
@@ -112,12 +152,8 @@ export function SupplierPinMap({ suppliers }: { suppliers: Supplier[] }) {
           {pinned.map((s) => (
             <Marker
               key={s.id}
-              position={[s.lat!, s.lng!]}
-              icon={
-                ICONS[
-                  `${s.status === "enrolled" ? "enrolled" : "candidate"}${focusId === s.id ? "Focused" : ""}` as keyof typeof ICONS
-                ]
-              }
+              position={positions.get(s.id)!}
+              icon={iconFor(s, focusId === s.id)}
               zIndexOffset={focusId === s.id ? 1000 : 0}
               eventHandlers={{ click: () => setFocusId(s.id) }}
             >
@@ -125,6 +161,9 @@ export function SupplierPinMap({ suppliers }: { suppliers: Supplier[] }) {
                 <div className="space-y-0.5">
                   <p className="text-sm font-medium">{s.shopName}</p>
                   <p className="text-xs text-muted-foreground">{formatAddress(s)}</p>
+                  {s.pinApproximate ? (
+                    <p className="text-xs font-medium text-amber-700">Approximate location</p>
+                  ) : null}
                 </div>
               </Popup>
             </Marker>
@@ -139,6 +178,11 @@ export function SupplierPinMap({ suppliers }: { suppliers: Supplier[] }) {
               <p className="truncate text-xs text-muted-foreground">
                 {formatAddress(focus)}
               </p>
+              {focus.pinApproximate ? (
+                <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                  Approximate pin: set the exact spot in Edit Details
+                </p>
+              ) : null}
             </div>
             <StatusBadge status={focus.status} />
             <SupplierLink
@@ -150,6 +194,14 @@ export function SupplierPinMap({ suppliers }: { suppliers: Supplier[] }) {
           </div>
         ) : null}
       </div>
+
+      {approximate.length > 0 ? (
+        <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+          {approximate.length === 1 ? "1 shop has" : `${approximate.length} shops have`} an approximate pin
+          (address not found): {approximate.map((s) => s.shopName).join(", ")}. Open the shop and
+          drag its pin in Edit Details.
+        </p>
+      ) : null}
 
       {unpinned.length > 0 ? (
         <p className="text-xs text-muted-foreground">
@@ -167,18 +219,26 @@ export function ShopMap({
   lng,
   title,
   status = "enrolled",
+  approximate = false,
 }: {
   lat: number;
   lng: number;
   title: string;
   status?: "enrolled" | "candidate";
+  approximate?: boolean;
 }) {
   const icon = useMemo(
-    () => makePin({ color: status === "enrolled" ? PIN_COLORS.enrolled : PIN_COLORS.candidate, size: 34 }),
-    [status],
+    () =>
+      makePin({ color: status === "enrolled" ? PIN_COLORS.enrolled : PIN_COLORS.candidate, size: 34, approximate }),
+    [status, approximate],
   );
   return (
     <div className="space-y-2">
+      {approximate ? (
+        <p className="rounded-md bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-400">
+          Approximate location: the address wasn't found. Use Edit Details to drag the pin onto the shop.
+        </p>
+      ) : null}
       <div className="h-56 overflow-hidden rounded-lg border">
         <MapContainer
           key={`${lat},${lng}`}

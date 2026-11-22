@@ -3,6 +3,7 @@ body:has(.astrix-dashboard) [data-slot="sidebar"][data-mobile="true"],
 body:has(.astrix-dashboard) [data-slot="dropdown-menu-content"],
 body:has(.astrix-dashboard) [data-slot="sheet-content"],
 body:has(.astrix-dashboard) [data-slot="tooltip-content"],
+body:has(.astrix-dashboard) [data-slot="modal-content"],
 [data-sonner-toaster] {
   --radius: 0.625rem;
   --background: oklch(1 0 0);
@@ -53,6 +54,7 @@ body:has(.astrix-dashboard) [data-slot="tooltip-content"],
 .dark body:has(.astrix-dashboard) [data-slot="dropdown-menu-content"],
 .dark body:has(.astrix-dashboard) [data-slot="sheet-content"],
 .dark body:has(.astrix-dashboard) [data-slot="tooltip-content"],
+.dark body:has(.astrix-dashboard) [data-slot="modal-content"],
 .dark [data-sonner-toaster] {
   --background: oklch(0.178 0.016 113.8); /* #11120a */
   --foreground: oklch(0.947 0.028 98.1); /* #f2eed9 cream */
@@ -493,4 +495,10 @@ body:has(.astrix-dashboard) [data-slot="tooltip-content"] > svg {
   .h2h-leaf {
     animation: h2h-fade 1.2s ease-in-out infinite alternate; /* gentle blink only */
   }
+}
+
+/* Modals render on <body>, outside .astrix-dashboard: they get the palette from the
+   selector lists above; this sets their text colour to match. */
+body:has(.astrix-dashboard) [data-slot="modal-content"] {
+  color: var(--foreground);
 }

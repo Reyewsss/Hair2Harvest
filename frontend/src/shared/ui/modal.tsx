@@ -166,6 +166,7 @@ export function ModalHost() {
       }}
     >
       <div
+        data-slot="modal-content"
         className={`relative w-full ${sizeClasses[options.size ?? "md"]} max-h-[90vh] overflow-y-auto rounded-xl border bg-card p-6 shadow-xl`}
       >
         {showClose && (

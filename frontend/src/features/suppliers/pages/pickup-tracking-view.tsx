@@ -26,6 +26,8 @@ import {
 } from "@/shared/ui/table";
 import { openModal, closeModal } from "@/shared/ui/modal";
 import { showResult } from "@/shared/ui/result-modal";
+import { cn } from "@/lib/utils";
+import { useCan } from "@/features/auth/access";
 import {
   PHOTO_RULE,
   compressImageToDataUrl,
@@ -45,94 +47,223 @@ import {
   formatPickupTime,
 } from "../components/pickup-ui";
 
-/* ─── Self-contained modal content: owns its sack state ──────────── */
+/* ─── Verify collection: photo check + sack count (owns its own state) ─ */
+const MAX_SACKS = 99;
+
+type CollectContext = {
+  shopName: string;
+  street?: string;
+  time?: string;
+  assignedTo?: string;
+};
+
+// Size of a base64 data URL's payload, for the "312 KB" badge.
+const dataUrlBytes = (url: string) =>
+  Math.round(((url.length - url.indexOf(",") - 1) * 3) / 4);
+
 function CollectConfirmModal({
   photo,
+  context,
   onConfirm,
   onRetake,
 }: {
   photo: string;
+  context: CollectContext;
   onConfirm: (sacks: number) => Promise<void> | void;
   onRetake: () => void;
 }) {
-  const [sacks, setSacks] = useState<string>("");
+  const [sacks, setSacks] = useState<number | "">("");
+  const [expanded, setExpanded] = useState(false);
+  const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  const valid =
+    typeof sacks === "number" &&
+    Number.isInteger(sacks) &&
+    sacks >= 1 &&
+    sacks <= MAX_SACKS;
+  const error =
+    !touched || valid
+      ? ""
+      : sacks === ""
+        ? "Enter how many sacks you collected."
+        : `Enter a whole number from 1 to ${MAX_SACKS}.`;
+
+  const change = (n: number) => {
+    setTouched(true);
+    setSacks(Math.min(MAX_SACKS, Math.max(1, n)));
+  };
+
   const handleConfirm = async () => {
-    const n = Number(sacks);
-    if (!Number.isFinite(n) || n < 0 || sacks.trim() === "") {
-      toast.error("Enter a valid number of sacks.");
-      return;
-    }
+    setTouched(true);
+    if (!valid || busy) return;
     setBusy(true);
     try {
-      await onConfirm(n);
+      await onConfirm(sacks as number);
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="max-h-[60vh] space-y-3 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      <div className="relative overflow-hidden rounded-lg border bg-secondary">
-        <img
-          src={photo}
-          alt="Proof of collection"
-          className="h-40 w-full object-cover object-top"
-        />
-        <span className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-full bg-background/90 px-2.5 py-1 text-xs font-medium backdrop-blur">
-          <Camera className="size-3.5" /> Proof photo
+    <form
+      className="space-y-5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void handleConfirm();
+      }}
+    >
+      {/* Which pickup this is */}
+      <div className="flex items-center gap-3 rounded-lg bg-secondary/70 p-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <Package className="size-5" />
         </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-medium">{context.shopName}</p>
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+            {context.street ? (
+              <span className="inline-flex items-center gap-1">
+                <MapPin className="size-3" /> {context.street}
+              </span>
+            ) : null}
+            {context.time ? <span>{context.time}</span> : null}
+            {context.assignedTo ? (
+              <span>Assigned: {context.assignedTo}</span>
+            ) : null}
+          </p>
+        </div>
       </div>
 
+      {/* Photo */}
       <div className="space-y-2">
-        <label htmlFor="sacks-input" className="text-sm font-medium">
-          Number of sacks
-        </label>
-        <div className="relative">
-          <Package className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            id="sacks-input"
-            type="number"
-            min={0}
-            step={1}
-            value={sacks}
-            onChange={(e) => setSacks(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void handleConfirm();
-            }}
-            placeholder="e.g. 2"
-            autoFocus
-            className="h-11 w-full rounded-lg border bg-background pr-3 pl-9 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium">Proof photo</p>
+          <button
+            type="button"
+            onClick={onRetake}
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline disabled:opacity-50"
+          >
+            <Camera className="size-3.5" /> Retake photo
+          </button>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Check the photo is clear before confirming. JPG, PNG or WEBP, up to{" "}
-          {formatBytes(PHOTO_RULE.maxBytes)}.
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="relative block w-full overflow-hidden rounded-lg border bg-secondary"
+          aria-label={expanded ? "Shrink photo" : "Enlarge photo"}
+        >
+          <img
+            src={photo}
+            alt="Proof of collection"
+            className={cn(
+              "mx-auto w-full object-contain transition-[max-height] duration-300",
+              expanded ? "max-h-[55vh]" : "max-h-52",
+            )}
+          />
+          <span className="absolute right-2 bottom-2 rounded-full bg-background/90 px-2 py-0.5 text-[0.7rem] font-medium text-muted-foreground backdrop-blur">
+            {formatBytes(dataUrlBytes(photo))} ·{" "}
+            {expanded ? "Tap to shrink" : "Tap to enlarge"}
+          </span>
+        </button>
+        <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+          <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-success" />
+          Make sure every sack is visible and the photo isn't blurry.
         </p>
       </div>
 
-      <div className="flex flex-col-reverse gap-2 border-t pt-3 sm:flex-row sm:justify-end">
-        <Button variant="outline" onClick={onRetake} disabled={busy}>
+      {/* Sacks */}
+      <div className="space-y-2">
+        <label htmlFor="sacks-input" className="text-sm font-medium">
+          Sacks collected
+        </label>
+        <div className="flex items-stretch gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            className="h-12 w-12 shrink-0 text-xl"
+            aria-label="One less sack"
+            disabled={busy || sacks === "" || sacks <= 1}
+            onClick={() => change((sacks || 1) - 1)}
+          >
+            −
+          </Button>
+          <input
+            id="sacks-input"
+            inputMode="numeric"
+            autoComplete="off"
+            value={sacks}
+            placeholder="0"
+            aria-invalid={!!error}
+            aria-describedby="sacks-help"
+            onChange={(e) => {
+              const digits = e.target.value.replace(/\D/g, "").slice(0, 2);
+              setTouched(true);
+              setSacks(digits === "" ? "" : Number(digits));
+            }}
+            className={cn(
+              "h-12 min-w-0 flex-1 rounded-lg border bg-background text-center text-2xl font-semibold tabular-nums outline-none placeholder:text-muted-foreground/40 focus-visible:ring-2 focus-visible:ring-primary/30",
+              error && "border-destructive focus-visible:ring-destructive/20",
+            )}
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            className="h-12 w-12 shrink-0 text-xl"
+            aria-label="One more sack"
+            disabled={busy || (sacks !== "" && sacks >= MAX_SACKS)}
+            onClick={() => change((sacks || 0) + 1)}
+          >
+            +
+          </Button>
+        </div>
+        <p
+          id="sacks-help"
+          className={cn(
+            "text-xs",
+            error ? "text-destructive" : "text-muted-foreground",
+          )}
+        >
+          {error || "Count every sealed sack from this shop."}
+        </p>
+      </div>
+
+      <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
+        <Button
+          type="button"
+          variant="outline"
+          className="h-10"
+          onClick={onRetake}
+          disabled={busy}
+        >
           <Camera className="mr-2 size-4" /> Retake
         </Button>
-        <Button onClick={handleConfirm} disabled={busy}>
+        <Button
+          type="submit"
+          className="h-10 min-w-44"
+          disabled={busy || (touched && !valid)}
+        >
           {busy ? (
             <>
               <Loader2 className="mr-2 size-4 animate-spin" /> Saving…
             </>
           ) : (
             <>
-              <CheckCircle2 className="mr-2 size-4" /> Confirm & Collect
+              <CheckCircle2 className="mr-2 size-4" />
+              {valid
+                ? `Confirm ${sacks} sack${sacks === 1 ? "" : "s"}`
+                : "Confirm collection"}
             </>
           )}
         </Button>
       </div>
-    </div>
+    </form>
   );
 }
 
 export function PickupTrackingView() {
+  // Only admins and operators verify deliveries; staff collect and hand over.
+  const canVerifyDelivery = useCan("suppliers:edit");
   const [activePickups, setActivePickups] = useState<any[]>([]);
   const [deliveredPickups, setDeliveredPickups] = useState<any[]>([]);
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -179,10 +310,17 @@ export function PickupTrackingView() {
         payload.sacks = sacks;
       }
       await pickupsApi.updateStatus(id, status, payload);
-      showResult({ type: status === "collected" ? "success" : "updated", title: `Marked as ${status}` });
+      showResult({
+        type: status === "collected" ? "success" : "updated",
+        title: `Marked as ${status}`,
+      });
       loadTracking();
     } catch (err: any) {
-      showResult({ type: "error", title: "Couldn't update pickup", message: err?.message ?? "Please try again." });
+      showResult({
+        type: "error",
+        title: "Couldn't update pickup",
+        message: err?.message ?? "Please try again.",
+      });
     } finally {
       setProcessingId(null);
     }
@@ -209,12 +347,23 @@ export function PickupTrackingView() {
 
     compressImageToDataUrl(file)
       .then((base64String) => {
+        const p = activePickups.find((x) => x._id === id);
         openModal({
-          title: "Verify Collection",
+          title: "Verify collection",
+          description: "Check the photo, then count the sacks.",
           size: "md",
+          closeOnOverlayClick: false, // don't lose the photo to a stray click
           content: (
             <CollectConfirmModal
               photo={base64String}
+              context={{
+                shopName: p?.supplierId?.shopName || "Unknown shop",
+                street: p?.supplierId?.street,
+                time: p?.scheduledTime
+                  ? formatPickupTime(p.scheduledTime)
+                  : undefined,
+                assignedTo: p?.assignedTo?.name,
+              }}
               onConfirm={async (sacksNum) => {
                 closeModal();
                 setCaptureId(null);
@@ -226,8 +375,9 @@ export function PickupTrackingView() {
                 );
               }}
               onRetake={() => {
+                // Straight back to the camera / file picker for the same pickup.
                 closeModal();
-                setCaptureId(null);
+                fileInputRef.current?.click();
               }}
             />
           ),
@@ -357,7 +507,11 @@ export function PickupTrackingView() {
       <SectionCard
         icon={Truck}
         title="Active Pickups"
-        description="Today's pickups. Collect with a photo, then mark as delivered."
+        description={
+          canVerifyDelivery
+            ? "Today's pickups. Collect with a photo, then verify the delivery."
+            : "Today's pickups. Collect with a photo; an admin or operator verifies the delivery."
+        }
         aside={<CountPill>{activePickups.length} active</CountPill>}
       >
         <div className="flex flex-wrap gap-2 border-b px-5 py-3">
@@ -483,6 +637,15 @@ export function PickupTrackingView() {
                           )}
                           {busy ? "Saving…" : "Collect"}
                         </Button>
+                      ) : p.status === "collected" && !canVerifyDelivery ? (
+                        // Staff: collected sacks wait for an admin/operator to verify delivery.
+                        <span
+                          className="inline-flex h-9 min-w-32 cursor-not-allowed items-center justify-center gap-2 rounded-lg border border-dashed px-4 text-sm font-medium text-muted-foreground"
+                          title="An admin or operator verifies the delivery"
+                          aria-label={`Pickup from ${p.supplierId?.shopName || "shop"} is waiting for delivery verification`}
+                        >
+                          <Truck className="size-4" /> For delivery
+                        </span>
                       ) : p.status === "collected" ? (
                         <Button
                           size="sm"
@@ -496,7 +659,7 @@ export function PickupTrackingView() {
                           ) : (
                             <CheckCircle2 className="size-4" />
                           )}
-                          {busy ? "Saving…" : "Deliver"}
+                          {busy ? "Saving…" : "Delivered"}
                         </Button>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">

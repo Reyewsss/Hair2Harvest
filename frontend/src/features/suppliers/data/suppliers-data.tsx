@@ -32,6 +32,8 @@ export interface SupplierInput {
   unit?: string;
   lat?: number;
   lng?: number;
+  /** No exact location found; the pin is the barangay centre. */
+  pinApproximate?: boolean;
   frequency: PickupFrequency;
   windowStart: string;
   windowEnd: string;
@@ -94,6 +96,14 @@ export const windowLabel = (
 
 export const hasPin = (s: Pick<SupplierInput, "lat" | "lng">) =>
   s.lat !== undefined && s.lng !== undefined;
+
+// Barangay-centre fallback the backend used when it couldn't place an address.
+const FALLBACK_PIN = { lat: 14.7289, lng: 121.0375 };
+export const isFallbackPin = (lat?: number, lng?: number) =>
+  lat !== undefined &&
+  lng !== undefined &&
+  Math.abs(lat - FALLBACK_PIN.lat) < 1e-6 &&
+  Math.abs(lng - FALLBACK_PIN.lng) < 1e-6;
 
 /** Formats the split address for display */
 export const formatAddress = (

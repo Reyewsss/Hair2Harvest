@@ -351,6 +351,7 @@ export function SupplierProfilePage({
                 lng={supplier.lng!}
                 title={supplier.shopName}
                 status={supplier.status}
+                approximate={supplier.pinApproximate}
               />
             ) : (
               <p className="text-sm text-muted-foreground">

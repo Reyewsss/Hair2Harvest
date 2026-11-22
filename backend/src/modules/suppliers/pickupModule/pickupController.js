@@ -4,6 +4,7 @@ import { Pickup } from "./pickupModel.js";
 import Supplier from "../supplierModel.js";
 import { WeightLog } from "../../inventory/inventoryModel.js";
 import { recordAudit } from "../../audit/auditController.js";
+import { can } from "../../auth/utils/permissions.js";
 import { sendSms } from "../utils/sms.js";
 
 /* ─── HELPERS ────────────────────────────────────────────────────────── */
@@ -101,6 +102,13 @@ export async function updatePickup(req, res) {
     );
 
     if (!pickup) return res.status(404).json({ message: "Pickup not found" });
+
+    // Delivery is verified by an admin or operator, never by the staff who collected.
+    if (status === "delivered" && !can(req.user?.role, "suppliers:edit")) {
+      return res
+        .status(403)
+        .json({ message: "Only an admin or operator can verify a delivery." });
+    }
 
     if (pickup.status !== "scheduled") {
       return res

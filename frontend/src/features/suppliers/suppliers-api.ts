@@ -1,5 +1,5 @@
 import { api, API_BASE } from "@/lib/api";
-import type { Supplier } from "./data/suppliers-data";
+import { isFallbackPin, type Supplier } from "./data/suppliers-data";
 
 export const mapBackendToFrontend = (b: any): Supplier => {
   // 👇 Safely split the owner field if firstName/lastName are missing
@@ -21,6 +21,8 @@ export const mapBackendToFrontend = (b: any): Supplier => {
     unit: b.unit || "",
     lat: b.lat,
     lng: b.lng,
+    // Older records have no flag; a pin exactly on the old fallback point is approximate too.
+    pinApproximate: Boolean(b.pinApproximate) || isFallbackPin(b.lat, b.lng),
     frequency: b.pickupFrequency === "biweekly" ? "twice-weekly" : b.pickupFrequency,
     windowStart: b.operatingHours?.open || "09:00",
     windowEnd: b.operatingHours?.close || "18:00",

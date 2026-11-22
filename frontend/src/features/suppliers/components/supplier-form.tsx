@@ -118,8 +118,9 @@ export function SupplierForm({
     initial?.lng ?? FALLBACK_CENTER[1],
   );
   // A saved shop already has an exact pin; don't overwrite it with a lookup on open.
+  // An approximate (fallback) pin isn't a real location, so look the street up again.
   const [pinMoved, setPinMoved] = useState(
-    initial?.lat !== undefined && initial?.lng !== undefined,
+    initial?.lat !== undefined && initial?.lng !== undefined && !initial?.pinApproximate,
   );
   const [geoLoading, setGeoLoading] = useState(false);
   const [matches, setMatches] = useState<GeocodeMatch[]>([]);
@@ -251,7 +252,10 @@ export function SupplierForm({
 
     formData.append("lat", String(pinLat));
     formData.append("lng", String(pinLng));
-    formData.append("pinManuallySet", String(pinMoved));
+    // Send the pin the user saw whenever it's a real location: dragged/clicked, or
+    // auto-located from the street. (Sending "false" for auto-located pins made the server
+    // re-geocode with a worse query and drop most shops on one fallback point.)
+    formData.append("pinManuallySet", String(pinMoved || !!chosen));
 
     if (!isEdit) {
       formData.append("registrationSource", REGISTRATION_SOURCE.ADMIN);
