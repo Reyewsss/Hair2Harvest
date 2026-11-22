@@ -261,6 +261,38 @@ function CollectConfirmModal({
   );
 }
 
+/** Today's date in the Philippines (YYYY-MM-DD), matching how pickups are stored. */
+function manilaToday() {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
+}
+
+function addDaysIso(iso: string, days: number) {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** "Today", "Tomorrow", "Overdue · Nov 20" or "Mon, Nov 30" under the pickup time. */
+function DayLabel({ date, today, status }: { date?: string; today: string; status: string }) {
+  if (!date) return null;
+  const late = date < today && status === "scheduled";
+  const text =
+    date === today
+      ? "Today"
+      : date === addDaysIso(today, 1)
+        ? "Tomorrow"
+        : formatPickupDate(date, date < today ? "MMM d" : "EEE, MMM d");
+  return (
+    <p
+      className={`mt-1 text-xs ${
+        late ? "font-medium text-destructive" : date === today ? "font-medium text-primary" : "text-muted-foreground"
+      }`}
+    >
+      {late ? `Overdue · ${text}` : text}
+    </p>
+  );
+}
+
 export function PickupTrackingView() {
   // Only admins and operators verify deliveries; staff collect and hand over.
   const canVerifyDelivery = useCan("suppliers:edit");
@@ -276,10 +308,11 @@ export function PickupTrackingView() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadTracking = () => {
-    const today = new Date().toISOString().slice(0, 10);
+    // Every scheduled / collected pickup, whatever its date: overdue ones still need
+    // collecting, and upcoming ones should be visible before the day arrives.
     Promise.all([
       pickupsApi
-        .getOldSchedule(today, "active")
+        .getOldSchedule("", "active")
         .then((res) => setActivePickups(res.pickups)),
       pickupsApi
         .getOldSchedule("", "past")
@@ -419,10 +452,17 @@ export function PickupTrackingView() {
   const awaitingDelivery = activePickups.filter(
     (p) => p.status === "collected",
   ).length;
-  // Earliest pickup first, then narrow by the selected status tab.
+  // Earliest date and time first (overdue → today → upcoming), then narrow by tab.
+  const today = manilaToday();
   const sortedActive = [...activePickups].sort((a, b) =>
-    String(a.scheduledTime ?? "").localeCompare(String(b.scheduledTime ?? "")),
+    `${a.scheduledDate ?? ""} ${a.scheduledTime ?? ""}`.localeCompare(
+      `${b.scheduledDate ?? ""} ${b.scheduledTime ?? ""}`,
+    ),
   );
+  const dueToday = activePickups.filter((p) => p.scheduledDate === today).length;
+  const overdue = activePickups.filter(
+    (p) => p.status === "scheduled" && p.scheduledDate < today,
+  ).length;
   const visiblePickups =
     filter === "all"
       ? sortedActive
@@ -478,7 +518,13 @@ export function PickupTrackingView() {
           icon={Clock}
           label="Awaiting collection"
           value={loading ? "…" : awaitingCollection}
-          note="Scheduled for today"
+          note={
+            loading
+              ? "Scheduled pickups"
+              : overdue > 0
+                ? `${dueToday} due today · ${overdue} overdue`
+                : `${dueToday} due today`
+          }
           tone={awaitingCollection > 0 ? "primary" : "default"}
         />
         <StatCard
@@ -509,8 +555,8 @@ export function PickupTrackingView() {
         title="Active Pickups"
         description={
           canVerifyDelivery
-            ? "Today's pickups. Collect with a photo, then verify the delivery."
-            : "Today's pickups. Collect with a photo; an admin or operator verifies the delivery."
+            ? "Overdue, today's and upcoming pickups. Collect with a photo, then verify the delivery."
+            : "Overdue, today's and upcoming pickups. Collect with a photo; an admin or operator verifies the delivery."
         }
         aside={<CountPill>{activePickups.length} active</CountPill>}
       >
@@ -560,13 +606,13 @@ export function PickupTrackingView() {
                 icon={Truck}
                 title={
                   activePickups.length === 0
-                    ? "No active pickups for today"
+                    ? "No active pickups"
                     : "Nothing in this tab"
                 }
                 description={
                   activePickups.length === 0
-                    ? "Scheduled pickups for today will show up here."
-                    : "Try another tab to see the rest of today's pickups."
+                    ? "Pickups you schedule will show up here until they are delivered."
+                    : "Try another tab to see the rest of the active pickups."
                 }
               />
             ) : (
@@ -578,6 +624,7 @@ export function PickupTrackingView() {
                       <span className="inline-flex rounded-md bg-secondary px-2 py-1 text-sm font-medium tabular-nums">
                         {formatPickupTime(p.scheduledTime)}
                       </span>
+                      <DayLabel date={p.scheduledDate} today={today} status={p.status} />
                     </TableCell>
                     <TableCell>
                       <p className="font-medium">

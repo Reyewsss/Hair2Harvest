@@ -340,7 +340,7 @@ export async function updateStatus(req, res) {
         $push: {
           history: {
             id: `H-${Date.now()}`,
-            date: new Date().toISOString().slice(0, 10),
+            date: new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" }), // PH calendar date
             collector: req.user?.name || "Unknown",
             sacks: finalSacks,
             grade: "A",
@@ -350,7 +350,7 @@ export async function updateStatus(req, res) {
 
       // 2. Create the inventory WeightLog (sacks, no kg)
       await WeightLog.create({
-        date: new Date().toISOString().slice(0, 10),
+        date: new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" }), // PH calendar date
         type: "in",
         sacks: finalSacks,
         shopId: pickup.supplierId.code,

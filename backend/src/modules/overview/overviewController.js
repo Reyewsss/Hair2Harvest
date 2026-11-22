@@ -6,7 +6,8 @@ import { WeightLog } from "../inventory/inventoryModel.js";
 export async function getDashboardData(req, res) {
   try {
     const now = new Date();
-    const today = now.toISOString().slice(0, 10);
+    // Pickup dates are stored as Philippine calendar dates (YYYY-MM-DD).
+    const today = now.toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
 
     // 1. Fetch Suppliers Data
     const totalSuppliers = await Supplier.countDocuments();
