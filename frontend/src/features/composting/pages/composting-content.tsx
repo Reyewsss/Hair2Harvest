@@ -1,11 +1,10 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import {
   Activity,
   Blend,
   CheckCircle2,
   Droplets,
   History,
-  PackagePlus,
   Plus,
   Scale,
   SkipForward,
@@ -16,6 +15,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { showResult } from "@/shared/ui/result-modal";
 import { AnimatedNumber } from "@/shared/ui/animated-number";
 import { cn } from "@/lib/utils";
+import { errorMessage } from "@/lib/api";
+import { useCan } from "@/features/auth/access";
+import { inventoryApi } from "@/features/inventory/inventory-api";
+import { LeafLoader } from "@/shared/ui/leaf-loader";
 import { useAuth } from "@/features/auth/context/auth-context";
 import { DashboardLink } from "@/features/dashboard-shell/components/navigation";
 import { SimControls } from "@/features/simulation/sim-controls";
@@ -38,6 +41,13 @@ export function CompostingContent() {
   const [creating, setCreating] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
 
+  // Raw hair on hand comes from the real inventory (sacks); starting a batch deducts from it.
+  const [onHand, setOnHand] = useState<number | null>(null);
+  const refreshStock = useCallback(() => {
+    inventoryApi.stock().then(setOnHand).catch(() => setOnHand(null));
+  }, []);
+  useEffect(refreshStock, [refreshStock]);
+
   const active = s.batches.find((b) => b.id === activeId) ?? s.batches.find((b) => b.stage !== "completed") ?? s.batches[0] ?? null;
 
   return (
@@ -50,9 +60,9 @@ export function CompostingContent() {
         </div>
         <div className="flex items-center gap-4">
           <div className="text-right">
-            <p className="text-sm font-medium text-muted-foreground">Test raw hair stock</p>
+            <p className="text-sm font-medium text-muted-foreground">Raw hair on hand</p>
             <p className="text-xl font-semibold">
-              <AnimatedNumber value={`${s.rawHairKg.toLocaleString("en-US")} kg`} duration={500} />
+              {onHand === null ? "—" : <AnimatedNumber value={`${onHand} sack${onHand === 1 ? "" : "s"}`} duration={500} />}
             </p>
           </div>
           <Button onClick={() => setCreating((v) => !v)} className="h-10 gap-2">
@@ -63,7 +73,18 @@ export function CompostingContent() {
 
       <SimControls />
 
-      {creating ? <CreateBatchForm operator={user?.name ?? "Operator"} onDone={(id) => { setCreating(false); if (id) setActiveId(id); }} /> : null}
+      {creating ? (
+        <CreateBatchForm
+          operator={user?.name ?? "Operator"}
+          onHand={onHand}
+          onDone={(id, remaining) => {
+            setCreating(false);
+            if (id) setActiveId(id);
+            if (remaining !== undefined) setOnHand(remaining);
+            else refreshStock();
+          }}
+        />
+      ) : null}
 
       {active ? <BatchTracker batch={active} clock={s.clock} /> : (
         <div className="rounded-xl border border-dashed py-12 text-center text-muted-foreground">
@@ -83,7 +104,7 @@ export function CompostingContent() {
               <TableHead>Machine</TableHead>
               <TableHead>Recipe</TableHead>
               <TableHead>Started</TableHead>
-              <TableHead>Weight</TableHead>
+              <TableHead>Sacks left / loaded</TableHead>
               <TableHead>Stage</TableHead>
               <TableHead className="text-right">Action</TableHead>
             </TableRow>
@@ -96,7 +117,7 @@ export function CompostingContent() {
                 <TableCell>{b.recipe}</TableCell>
                 <TableCell className="text-muted-foreground">{formatSimTime(b.createdAt)}</TableCell>
                 <TableCell className="tabular-nums">
-                  {b.weight.toFixed(1)} / {b.initialWeight} kg
+                  {b.weight.toFixed(1)} / {b.initialWeight} sacks
                 </TableCell>
                 <TableCell>
                   <StageBadge stage={b.stage} />
@@ -115,32 +136,69 @@ export function CompostingContent() {
   );
 }
 
-function CreateBatchForm({ operator, onDone }: { operator: string; onDone: (id?: string) => void }) {
+function CreateBatchForm({
+  operator,
+  onHand,
+  onDone,
+}: {
+  operator: string;
+  onHand: number | null;
+  onDone: (id?: string, remaining?: number) => void;
+}) {
   const s = useSimulation();
+  const canProcess = useCan("inventory:edit"); // the server enforces the same rule
   const free = s.machines.filter((m) => !m.batchId);
   const [recipe, setRecipe] = useState(mockRecipeVersions[0]);
-  const [kg, setKg] = useState(100);
+  const [sacks, setSacks] = useState(1);
   const [machineId, setMachineId] = useState(free[0]?.id ?? "");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  const submit = (e: FormEvent) => {
+  const tooMany = onHand !== null && sacks > onHand;
+
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (busy) return;
+    if (!Number.isInteger(sacks) || sacks < 1) return setError("Enter at least 1 sack.");
+    if (tooMany) return setError(`Only ${onHand} sack${onHand === 1 ? "" : "s"} on hand.`);
+    if (!sim.machineFree(machineId)) return setError("That test machine is busy. Pick another one.");
+    setError("");
+    setBusy(true);
     try {
-      const id = sim.createBatch({ machineId, kg, recipe: recipe.split(" ")[0], operator });
-      showResult({ type: "created", title: `Test batch ${id} started` });
-      onDone(id);
+      const id = sim.nextBatchId();
+      // Deduct from the real inventory first; only start the batch if that succeeds.
+      const { onHand: remaining } = await inventoryApi.consume(sacks, id, `Simulation test batch on ${machineId}`);
+      sim.createBatch({ machineId, sacks, recipe: recipe.split(" ")[0], operator });
+      showResult({
+        type: "created",
+        title: `Batch ${id} started: ${sacks} sack${sacks === 1 ? "" : "s"} taken from inventory`,
+      });
+      onDone(id, remaining);
     } catch (err) {
-      setError((err as Error).message);
+      setError(errorMessage(err));
+      setBusy(false);
     }
   };
 
   return (
     <section className="rounded-xl border bg-card p-6 shadow-sm animate-in fade-in slide-in-from-top-4">
       <h2 className="mb-1 text-lg font-medium">Start a test batch</h2>
-      <p className="mb-4 text-sm text-muted-foreground">Loads simulated hair into a free test machine. Starts in preparation.</p>
-      {free.length === 0 ? (
+      <p className="mb-4 text-sm text-muted-foreground">
+        Takes raw-hair sacks out of the real inventory and loads them into a free test machine.
+      </p>
+      {!canProcess ? (
+        <p className="rounded-lg bg-secondary px-3 py-2 text-sm text-muted-foreground">
+          Only an admin or operator can take sacks from inventory to start a batch.
+        </p>
+      ) : free.length === 0 ? (
         <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
           Both test machines are busy. Finish a batch (or use “Next stage”) to free one.
+        </p>
+      ) : onHand === null ? (
+        <LeafLoader label="Checking inventory" />
+      ) : onHand < 1 ? (
+        <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
+          No raw hair on hand. Deliver collected pickups to add sacks to inventory.
         </p>
       ) : (
         <form onSubmit={submit} className="grid gap-4 sm:grid-cols-3">
@@ -154,17 +212,20 @@ function CreateBatchForm({ operator, onDone }: { operator: string; onDone: (id?:
             </select>
           </label>
           <label className="flex flex-col gap-1.5 text-sm font-medium">
-            Hair material (kg)
+            Sacks of raw hair
             <input
               type="number"
               required
               min={1}
-              max={s.rawHairKg}
-              className={fieldClass}
-              value={kg}
-              onChange={(e) => setKg(Number(e.target.value))}
+              max={onHand}
+              step={1}
+              className={cn(fieldClass, tooMany && "ring-2 ring-destructive/40")}
+              value={sacks}
+              onChange={(e) => setSacks(Math.floor(Number(e.target.value)))}
             />
-            <span className="text-xs font-normal text-muted-foreground">{s.rawHairKg} kg in test stock</span>
+            <span className={cn("text-xs font-normal", tooMany ? "text-destructive" : "text-muted-foreground")}>
+              {onHand} sack{onHand === 1 ? "" : "s"} on hand
+            </span>
           </label>
           <label className="flex flex-col gap-1.5 text-sm font-medium">
             Test machine
@@ -177,13 +238,12 @@ function CreateBatchForm({ operator, onDone }: { operator: string; onDone: (id?:
             </select>
           </label>
           <div className="flex flex-wrap justify-end gap-2 sm:col-span-3">
-            <Button type="button" variant="ghost" className="mr-auto gap-2" onClick={() => sim.restockHair()}>
-              <PackagePlus className="size-4" /> Add 250 kg test stock
-            </Button>
-            <Button type="button" variant="outline" onClick={() => onDone()}>
+            <Button type="button" variant="outline" onClick={() => onDone()} disabled={busy}>
               Cancel
             </Button>
-            <Button type="submit">Start batch</Button>
+            <Button type="submit" disabled={busy || tooMany}>
+              {busy ? "Starting…" : `Start batch & deduct ${sacks} sack${sacks === 1 ? "" : "s"}`}
+            </Button>
           </div>
         </form>
       )}
@@ -227,7 +287,7 @@ function BatchTracker({ batch, clock }: { batch: SimBatch; clock: number }) {
         </div>
         <div className="grid grid-cols-3 gap-6 text-right">
           <Reading icon={<Thermometer />} label="Core temp" value={`${batch.temp.toFixed(1)}°C`} />
-          <Reading icon={<Scale />} label="Weight" value={`${batch.weight.toFixed(1)} kg`} note={`−${lossPct.toFixed(1)}%`} />
+          <Reading icon={<Scale />} label="Sacks" value={`${batch.weight.toFixed(1)} sacks`} note={`−${lossPct.toFixed(1)}%`} />
           <Reading icon={<Droplets />} label="Moisture" value={`${batch.moisture.toFixed(1)}%`} valueClass={moistureTone} note={batch.moisture < 40 ? "Too dry" : batch.moisture > 70 ? "Too wet" : "OK"} />
         </div>
       </div>
@@ -292,7 +352,7 @@ function BatchTracker({ batch, clock }: { batch: SimBatch; clock: number }) {
               <TableHead>Sim time</TableHead>
               <TableHead>Event</TableHead>
               <TableHead>Temp (°C)</TableHead>
-              <TableHead>Weight (kg)</TableHead>
+              <TableHead>Sacks</TableHead>
               <TableHead>Moisture (%)</TableHead>
             </TableRow>
           </TableHeader>

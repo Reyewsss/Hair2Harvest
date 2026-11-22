@@ -12,7 +12,8 @@ import { STAGES, type BatchStage } from "@/features/composting/data/composting-d
  *   Aeration (motor running) helps; mixing cools it briefly; too dry / too wet
  *   slows the microbes.
  * - Moisture evaporates faster when hot; "Add water" raises it.
- * - Weight drops with microbial activity (≈25% over the composting stage).
+ * - The batch is measured in sacks (as taken from inventory) and composts down with
+ *   microbial activity (≈25% over the composting stage).
  * - Stages advance on their own after their duration; completed batches free
  *   the machine.
  * - Safety: > 72 °C trips an overheat fault; opening the lid while the motor
@@ -48,7 +49,7 @@ export interface SimLog {
   t: number;
   event: string;
   temp: number | null;
-  weight: number | null;
+  weight: number | null; // sacks
   moisture: number | null;
 }
 
@@ -57,8 +58,10 @@ export interface SimBatch {
   machineId: string | null;
   recipe: string;
   operator: string;
-  initialWeight: number;
-  weight: number;
+  /** Raw-hair sacks taken from inventory for this batch. */
+  sacks?: number;
+  initialWeight: number; // sacks loaded
+  weight: number; // sacks remaining as it composts down
   moisture: number;
   temp: number;
   stage: BatchStage;
@@ -84,7 +87,6 @@ export interface SimState {
   running: boolean;
   speed: Speed;
   clock: number; // simulated epoch ms
-  rawHairKg: number;
   nextBatchNo: number;
   machines: SimMachine[];
   batches: SimBatch[];
@@ -106,7 +108,7 @@ const OVERHEAT_C = 72;
 const MIX_SECONDS = 30 * 60;
 const SAMPLE_EVERY = 6 * HOUR;
 const HISTORY_POINTS = 60;
-const STORAGE_KEY = "h2h-sim-v1";
+const STORAGE_KEY = "h2h-sim-v2"; // v2: batches measured in sacks
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
@@ -124,8 +126,9 @@ function seed(): SimState {
     machineId: "SIM-01",
     recipe: "v1.2",
     operator: "Simulator",
-    initialWeight: 120,
-    weight: 112.4,
+    sacks: 12,
+    initialWeight: 12,
+    weight: 11.2,
     moisture: 56,
     temp: 58.5,
     stage: "composting",
@@ -133,8 +136,8 @@ function seed(): SimState {
     createdAt: started,
     lastSampleAt: now,
     logs: [
-      { t: now - ms(3 * DAY), event: "Stage → composting", temp: 33.1, weight: 119.6, moisture: 60 },
-      { t: started, event: "Batch created (test)", temp: AMBIENT, weight: 120, moisture: 60 },
+      { t: now - ms(3 * DAY), event: "Stage → composting", temp: 33.1, weight: 12, moisture: 60 },
+      { t: started, event: "Batch created (test)", temp: AMBIENT, weight: 12, moisture: 60 },
     ],
   };
   return {
@@ -142,7 +145,6 @@ function seed(): SimState {
     running: true,
     speed: 600,
     clock: now,
-    rawHairKg: 500,
     nextBatchNo: 2,
     machines: [
       {
@@ -444,29 +446,48 @@ export const sim = {
       Object.assign(m, { fault: null, online: true, motor: m.motor === "fault" ? "stopped" : m.motor });
     }),
 
-  createBatch: (input: { machineId: string; kg: number; recipe: string; operator: string }) => {
+  /** The ID the next test batch will get (so inventory can be tagged before it starts). */
+  nextBatchId: () => `TEST-${String(state.nextBatchNo).padStart(3, "0")}`,
+
+  /** True when the machine can take a new batch. */
+  machineFree: (machineId: string) => {
+    const m = state.machines.find((x) => x.id === machineId);
+    return !!m && !m.batchId;
+  },
+
+  /** Starts a test batch from `sacks` of raw hair. The caller deducts
+   *  the sacks from inventory first; see composting-content.tsx. */
+  createBatch: (input: { machineId: string; sacks: number; recipe: string; operator: string }) => {
     const m = state.machines.find((x) => x.id === input.machineId);
     if (!m || m.batchId) throw new Error("That test machine already has a batch.");
-    if (input.kg <= 0 || input.kg > state.rawHairKg) throw new Error("Not enough test raw hair in stock.");
-    const id = `TEST-${String(state.nextBatchNo).padStart(3, "0")}`;
+    if (!Number.isInteger(input.sacks) || input.sacks < 1) throw new Error("Enter at least 1 sack.");
+    const id = sim.nextBatchId();
     const batch: SimBatch = {
       id,
       machineId: m.id,
       recipe: input.recipe,
       operator: input.operator,
-      initialWeight: input.kg,
-      weight: input.kg,
+      sacks: input.sacks,
+      initialWeight: input.sacks,
+      weight: input.sacks,
       moisture: 60,
       temp: AMBIENT,
       stage: "preparation",
       stageStartedAt: state.clock,
       createdAt: state.clock,
       lastSampleAt: state.clock,
-      logs: [{ t: state.clock, event: `Batch created by ${input.operator}`, temp: AMBIENT, weight: input.kg, moisture: 60 }],
+      logs: [
+        {
+          t: state.clock,
+          event: `Batch created by ${input.operator}: ${input.sacks} sack${input.sacks === 1 ? "" : "s"} from inventory`,
+          temp: AMBIENT,
+          weight: input.sacks,
+          moisture: 60,
+        },
+      ],
     };
     commit({
       ...state,
-      rawHairKg: round1(state.rawHairKg - input.kg),
       nextBatchNo: state.nextBatchNo + 1,
       batches: [batch, ...state.batches],
       machines: state.machines.map((x) => (x.id === m.id ? { ...x, batchId: id } : x)),
@@ -493,7 +514,6 @@ export const sim = {
       }),
     }),
 
-  restockHair: (kg = 250) => commit({ ...state, rawHairKg: round1(state.rawHairKg + kg) }),
 };
 
 /* ── Display helpers ──────────────────────────────────────────────────── */

@@ -204,7 +204,7 @@ export function MachineContent() {
                 <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${stageProgress(batch, s.clock) * 100}%` }} />
               </div>
               <dl className="grid grid-cols-2 gap-2 text-sm">
-                <Mini label="Weight" value={`${batch.weight.toFixed(1)} kg`} />
+                <Mini label="Sacks" value={`${batch.weight.toFixed(1)} of ${batch.initialWeight}`} />
                 <Mini label="Moisture" value={`${batch.moisture.toFixed(1)}%`} />
                 <Mini label="Started" value={formatSimTime(batch.createdAt)} />
                 <Mini label="Operator" value={batch.operator} />
