@@ -1,67 +1,73 @@
 // backend/src/modules/suppliers/utils/sms.js
 // TextBee SMS gateway — sends through your own Android phone.
-// Docs: https://textbee.dev/docs
+// Docs: https://textbee.dev/docs/api-reference (POST /gateway/send-sms)
 
 const TEXTBEE_URL = "https://api.textbee.dev/api/v1/gateway/send-sms";
 
 /**
+ * Normalises a PH number to E.164 (+639XXXXXXXXX). Accepts spaces, dashes, dots and
+ * parentheses, plus the 09…, 9…, 639… and +639… forms. Returns null if it isn't a PH mobile.
+ */
+export function toE164(phone) {
+  const digits = String(phone ?? "").replace(/[\s\-().]/g, "");
+  if (/^\+639\d{9}$/.test(digits)) return digits;
+  if (/^639\d{9}$/.test(digits)) return "+" + digits;
+  if (/^09\d{9}$/.test(digits)) return "+63" + digits.slice(1);
+  if (/^9\d{9}$/.test(digits)) return "+63" + digits;
+  return null;
+}
+
+/**
  * Send an SMS via TextBee.
- * @param {string} to - Recipient phone (E.164 recommended, e.g. +639171234567)
+ * @param {string} to - Recipient phone (PH mobile in any common format)
  * @param {string} message - Message body
  * @returns {Promise<{ success: boolean, smsBatchId?: string, error?: string }>}
  */
 export async function sendSms(to, message) {
-  const apiKey = process.env.TEXTBEE_API_KEY;
+  const apiKey = process.env.TEXTBEE_API_KEY?.trim();
   if (!apiKey) {
     console.warn("TEXTBEE_API_KEY not set — SMS not sent");
     return { success: false, error: "SMS gateway not configured" };
   }
 
-  // TextBee expects E.164 format. Convert PH local "09XXXXXXXXX" → "+639XXXXXXXXX"
-  let recipient = String(to).replace(/\s/g, "");
-  if (/^09\d{9}$/.test(recipient)) {
-    recipient = "+63" + recipient.slice(1);
-  } else if (/^9\d{9}$/.test(recipient)) {
-    recipient = "+63" + recipient;
+  const recipient = toE164(to);
+  if (!recipient) {
+    return { success: false, error: `"${to}" is not a valid PH mobile number` };
   }
 
-  const body = {
-    recipients: [recipient],
-    message: message,
-  };
-
-  // Only include deviceId if you've set a specific one
-  if (process.env.TEXTBEE_DEVICE_ID) {
-    body.deviceId = process.env.TEXTBEE_DEVICE_ID;
-  }
+  const body = { recipients: [recipient], message };
+  if (process.env.TEXTBEE_DEVICE_ID?.trim()) body.deviceId = process.env.TEXTBEE_DEVICE_ID.trim();
 
   try {
     const res = await fetch(TEXTBEE_URL, {
       method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "Content-Type": "application/json",
-      },
+      headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10_000),
     });
 
-    const data = await res.json();
+    // Error pages aren't always JSON.
+    const data = await res.json().catch(() => null);
 
     if (!res.ok) {
       console.error("TextBee send failed:", res.status, data);
-      return {
-        success: false,
-        error: data?.error || data?.message || `HTTP ${res.status}`,
-      };
+      const reason =
+        res.status === 401 ? "Invalid TextBee API key"
+        : res.status === 429 ? "TextBee plan limit reached"
+        : data?.error || data?.message || `HTTP ${res.status}`;
+      return { success: false, error: reason };
     }
 
-    // TextBee returns { data: { success, message, smsBatchId } }
-    return {
-      success: true,
-      smsBatchId: data?.data?.smsBatchId,
-    };
+    // TextBee returns { data: { success, message, smsBatchId, warning? } }
+    const result = data?.data ?? {};
+    if (result.success === false) {
+      return { success: false, error: result.message || "TextBee rejected the message" };
+    }
+    if (result.warning) console.warn("TextBee warning:", result.warning);
+
+    return { success: true, smsBatchId: result.smsBatchId };
   } catch (err) {
     console.error("TextBee fetch error:", err.message);
-    return { success: false, error: err.message };
+    return { success: false, error: err.name === "TimeoutError" ? "SMS gateway timed out" : err.message };
   }
 }

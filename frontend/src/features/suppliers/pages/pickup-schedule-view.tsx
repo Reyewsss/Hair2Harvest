@@ -278,7 +278,7 @@ export function PickupScheduleView() {
 
     setSubmitting(true);
     try {
-      await pickupsApi.schedule({
+      const result = await pickupsApi.schedule({
         supplierId: selectedShop,
         date,
         time,
@@ -288,12 +288,21 @@ export function PickupScheduleView() {
       setSelectedShop("");
       setAssignedTo("");
       await loadSchedule();
-      showResult({
-        type: "created",
-        title: "Pickup scheduled",
-        message: "The shop has been notified by SMS.",
-        details,
-      });
+      if (result?.sms?.sent === false) {
+        showResult({
+          type: "warning",
+          title: "Pickup scheduled, but the SMS wasn't sent",
+          message: result.sms.error || "The SMS gateway didn't accept the message.",
+          details,
+        });
+      } else {
+        showResult({
+          type: "created",
+          title: "Pickup scheduled",
+          message: "The shop has been notified by SMS.",
+          details,
+        });
+      }
     } catch (err: any) {
       if (isDuplicateError(err)) {
         showResult({

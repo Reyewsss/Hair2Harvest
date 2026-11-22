@@ -66,11 +66,10 @@ export async function schedulePickup(req, res) {
     const firstName = (supplier.owner || "there").split(" ")[0];
     const msg = `Hi ${firstName}, this is a reminder from Hair2Harvest: the next hair pickup at ${supplier.shopName} is on ${date} at ${time}. Please have your sacks ready. Thank you!`;
 
-    sendSms(supplier.phone, msg).then((result) => {
-      if (!result?.success) {
-        console.error("Failed to send schedule SMS:", result?.error);
-      }
-    });
+    // Awaited: on Vercel the function can be frozen as soon as the response is sent,
+    // which would silently drop a fire-and-forget SMS.
+    const sms = await sendSms(supplier.phone, msg);
+    if (!sms.success) console.error("Failed to send schedule SMS:", sms.error);
 
     await recordAudit({
       req,
@@ -82,7 +81,11 @@ export async function schedulePickup(req, res) {
     });
 
     const populated = await populateOne(pickup._id);
-    res.status(201).json({ success: true, pickup: populated });
+    res.status(201).json({
+      success: true,
+      pickup: populated,
+      sms: { sent: sms.success, error: sms.success ? undefined : sms.error },
+    });
   } catch (error) {
     console.error("🚨 PICKUP ERROR:", error);
     if (error.code === 11000) {
