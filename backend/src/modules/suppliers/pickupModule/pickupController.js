@@ -6,6 +6,8 @@ import { WeightLog } from "../../inventory/inventoryModel.js";
 import { recordAudit } from "../../audit/auditController.js";
 import { can } from "../../auth/utils/permissions.js";
 import { sendSms } from "../utils/sms.js";
+import { User } from "../../auth/authModel.js";
+import { notifyAssignedStaff } from "./notifyStaff.js";
 
 /* ─── HELPERS ────────────────────────────────────────────────────────── */
 
@@ -19,10 +21,16 @@ async function resolveSupplier(ref) {
 async function resolveStaffId(ref) {
   if (!ref) return undefined;
   if (mongoose.isValidObjectId(ref)) return ref;
-  const { User } = await import("../auth/userModel.js").catch(() => ({}));
-  if (!User) return undefined;
   const staff = await User.findOne({ code: ref }).lean();
   return staff?._id;
+}
+
+// Texts and emails the assigned staff member. Returns { sms, email } or null when nobody is assigned.
+async function tellStaff({ staffId, supplier, date, time, reason }) {
+  if (!staffId) return null;
+  const staff = await User.findById(staffId).select("name firstName email notifyEmail phone isActive").lean();
+  if (!staff || staff.isActive === false) return null;
+  return notifyAssignedStaff({ staff, supplier, date, time, reason });
 }
 
 const DUPLICATE_MESSAGE =
@@ -71,13 +79,25 @@ export async function schedulePickup(req, res) {
     const sms = await sendSms(supplier.phone, msg);
     if (!sms.success) console.error("Failed to send schedule SMS:", sms.error);
 
+    const staffNotice = await tellStaff({
+      staffId: assignedToId,
+      supplier,
+      date,
+      time,
+      reason: "assigned",
+    });
+
     await recordAudit({
       req,
       action: "schedule",
       module: "pickups",
       item: `${supplier.shopName} (${supplier.code})`,
       itemId: pickup._id.toString(),
-      remarks: `Scheduled for ${date} at ${time}`,
+      remarks: `Scheduled for ${date} at ${time}${
+        staffNotice
+          ? `; staff notified (SMS ${staffNotice.sms.sent ? "sent" : "failed"}, email ${staffNotice.email.sent ? "sent" : "failed"})`
+          : ""
+      }`,
     });
 
     const populated = await populateOne(pickup._id);
@@ -85,6 +105,7 @@ export async function schedulePickup(req, res) {
       success: true,
       pickup: populated,
       sms: { sent: sms.success, error: sms.success ? undefined : sms.error },
+      staffNotice,
     });
   } catch (error) {
     console.error("🚨 PICKUP ERROR:", error);
@@ -101,17 +122,10 @@ export async function updatePickup(req, res) {
     const { date, time, assignedTo } = req.body;
     const pickup = await Pickup.findById(req.params.id).populate(
       "supplierId",
-      "shopName code",
+      "shopName code owner phone street barangay",
     );
 
     if (!pickup) return res.status(404).json({ message: "Pickup not found" });
-
-    // Delivery is verified by an admin or operator, never by the staff who collected.
-    if (status === "delivered" && !can(req.user?.role, "suppliers:edit")) {
-      return res
-        .status(403)
-        .json({ message: "Only an admin or operator can verify a delivery." });
-    }
 
     if (pickup.status !== "scheduled") {
       return res
@@ -123,6 +137,8 @@ export async function updatePickup(req, res) {
     }
 
     const before = `${pickup.scheduledDate} at ${pickup.scheduledTime}`;
+    const previousStaff = pickup.assignedTo ? String(pickup.assignedTo) : "";
+    const timeChanged = pickup.scheduledDate !== date || pickup.scheduledTime !== time;
 
     pickup.scheduledDate = date;
     pickup.scheduledTime = time;
@@ -130,6 +146,13 @@ export async function updatePickup(req, res) {
     pickup.assignedTo = assignedTo ? await resolveStaffId(assignedTo) : undefined;
 
     await pickup.save();
+
+    // New assignee -> "assigned". Same assignee but a new date/time -> "rescheduled".
+    const nextStaff = pickup.assignedTo ? String(pickup.assignedTo) : "";
+    const reason = nextStaff && nextStaff !== previousStaff ? "assigned" : nextStaff && timeChanged ? "rescheduled" : null;
+    const staffNotice = reason
+      ? await tellStaff({ staffId: nextStaff, supplier: pickup.supplierId, date, time, reason })
+      : null;
 
     await recordAudit({
       req,
@@ -143,7 +166,7 @@ export async function updatePickup(req, res) {
     });
 
     const populated = await populateOne(pickup._id);
-    res.status(200).json({ success: true, pickup: populated });
+    res.status(200).json({ success: true, pickup: populated, staffNotice });
   } catch (error) {
     console.error("🚨 PICKUP ERROR:", error);
     if (error.code === 11000) {
@@ -322,6 +345,25 @@ export async function updateStatus(req, res) {
       return res
         .status(400)
         .json({ message: "Supplier for this pickup no longer exists." });
+    }
+
+    // Only the two real transitions are allowed: scheduled -> collected -> delivered.
+    const allowedFrom = { collected: "scheduled", delivered: "collected" };
+    if (!allowedFrom[status]) {
+      return res.status(400).json({ message: "Status must be 'collected' or 'delivered'." });
+    }
+    if (pickup.status !== allowedFrom[status]) {
+      return res.status(400).json({ message: `Only a ${allowedFrom[status]} pickup can be marked ${status}.` });
+    }
+
+    const canManage = can(req.user?.role, "suppliers:edit");
+    // Delivery is verified by an admin or operator, never by the staff who collected.
+    if (status === "delivered" && !canManage) {
+      return res.status(403).json({ message: "Only an admin or operator can verify a delivery." });
+    }
+    // Staff can only collect pickups assigned to them (or not assigned to anyone yet).
+    if (status === "collected" && !canManage && pickup.assignedTo && String(pickup.assignedTo) !== String(req.user._id)) {
+      return res.status(403).json({ message: "This pickup is assigned to another staff member." });
     }
 
     // Validate sacks on collection

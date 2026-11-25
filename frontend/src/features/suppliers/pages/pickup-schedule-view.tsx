@@ -41,10 +41,13 @@ import {
   SectionCard,
   StatCard,
   TableEmpty,
+  TablePager,
   TableSkeleton,
   formatPickupDate,
   formatPickupTime,
+  usePaged,
 } from "../components/pickup-ui";
+import { ActionButton } from "../components/action-button";
 import { closeModal, confirm, openModal } from "@/shared/ui/modal";
 import { isDuplicateError, showResult } from "@/shared/ui/result-modal";
 
@@ -133,7 +136,7 @@ function EditPickupModal({
           <option value="">-- Unassigned --</option>
           {staffList.map((s) => (
             <option key={s.id ?? s._id} value={s.id ?? s._id}>
-              {s.name}
+              {s.name}{s.hasPhone === false ? " (no phone: SMS won't send)" : ""}
             </option>
           ))}
         </SelectBox>
@@ -182,6 +185,19 @@ function EditPickupModal({
   );
 }
 
+type Channel = { sent: boolean; error?: string };
+type StaffNotice = { sms: Channel; email: Channel } | null | undefined;
+
+/** One line saying how the assigned staff member was told, or null when nobody was assigned. */
+function staffNoticeLine(notice: StaffNotice) {
+  if (!notice) return null;
+  const parts = [
+    notice.sms.sent ? "SMS sent" : `SMS not sent (${notice.sms.error ?? "unknown error"})`,
+    notice.email.sent ? "email sent" : `email not sent (${notice.email.error ?? "unknown error"})`,
+  ];
+  return { ok: notice.sms.sent && notice.email.sent, text: `Assigned staff: ${parts.join(", ")}.` };
+}
+
 export function PickupScheduleView() {
   const { suppliers } = useSuppliers();
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -197,6 +213,16 @@ export function PickupScheduleView() {
   const [time, setTime] = useState("20:00");
   const [frequency, setFrequency] = useState("weekly");
   const [submitting, setSubmitting] = useState(false);
+  // pickup id -> the action currently running on it (drives the per-row spinner)
+  const [pending, setPending] = useState<Record<string, string>>({});
+  const track = async (id: string, action: string, fn: () => Promise<void>) => {
+    setPending((m) => ({ ...m, [id]: action }));
+    try {
+      await fn();
+    } finally {
+      setPending(({ [id]: _done, ...rest }) => rest);
+    }
+  };
 
   useEffect(() => {
     staffApi
@@ -292,14 +318,17 @@ export function PickupScheduleView() {
         showResult({
           type: "warning",
           title: "Pickup scheduled, but the SMS wasn't sent",
-          message: result.sms.error || "The SMS gateway didn't accept the message.",
+          message: `${result.sms.error || "The SMS gateway didn't accept the message."}${
+            staffNoticeLine(result?.staffNotice) ? ` ${staffNoticeLine(result?.staffNotice)!.text}` : ""
+          }`,
           details,
         });
       } else {
+        const staffLine = staffNoticeLine(result?.staffNotice);
         showResult({
-          type: "created",
+          type: staffLine && !staffLine.ok ? "warning" : "created",
           title: "Pickup scheduled",
-          message: "The shop has been notified by SMS.",
+          message: `The shop has been notified by SMS.${staffLine ? ` ${staffLine.text}` : ""}`,
           details,
         });
       }
@@ -341,10 +370,16 @@ export function PickupScheduleView() {
               { label: "Time", value: formatPickupTime(data.time) },
             ];
             try {
-              await pickupsApi.update(p._id, data);
+              const updated = await pickupsApi.update(p._id, data);
               closeModal();
               await loadSchedule();
-              showResult({ type: "updated", title: "Pickup updated", details });
+              const staffLine = staffNoticeLine(updated?.staffNotice);
+              showResult({
+                type: staffLine && !staffLine.ok ? "warning" : "updated",
+                title: "Pickup updated",
+                message: staffLine?.text,
+                details,
+              });
               return true;
             } catch (err: any) {
               closeModal();
@@ -379,7 +414,7 @@ export function PickupScheduleView() {
       description: `${shopName} · ${formatPickupDate(p.scheduledDate)} at ${formatPickupTime(p.scheduledTime)}. It moves to the Archived table and can be restored.`,
       confirmLabel: "Archive",
       cancelLabel: "Cancel",
-      onConfirm: async () => {
+      onConfirm: () => track(p._id, "archive", async () => {
         try {
           await pickupsApi.archive(p._id);
           await loadSchedule();
@@ -395,7 +430,7 @@ export function PickupScheduleView() {
             message: err?.message || "Please try again.",
           });
         }
-      },
+      }),
     });
   };
 
@@ -428,7 +463,7 @@ export function PickupScheduleView() {
       confirmLabel: "Delete",
       cancelLabel: "Cancel",
       variant: "destructive",
-      onConfirm: async () => {
+      onConfirm: () => track(p._id, "delete", async () => {
         try {
           await pickupsApi.remove(p._id);
           await loadSchedule();
@@ -444,7 +479,7 @@ export function PickupScheduleView() {
             message: err?.message || "Please try again.",
           });
         }
-      },
+      }),
     });
   };
 
@@ -477,45 +512,46 @@ export function PickupScheduleView() {
     (p) => p.scheduledDate?.slice(0, 10) !== date,
   );
 
+  // 10 rows per table
+  const activePaged = usePaged(activePickups);
+  const upcomingPaged = usePaged(upcomingPickups);
+  const pastPaged = usePaged(pastPickups);
+  const archivedPaged = usePaged(archivedPickups);
+
   // Edit / Archive / Delete for a scheduled pickup, shared by both active tables.
-  const renderActions = (p: any) =>
-    p.status === "scheduled" ? (
+  // Each button spins while its own action runs; the row's other buttons lock meanwhile.
+  const renderActions = (p: any) => {
+    const running = pending[p._id];
+    return p.status === "scheduled" ? (
       <div className="inline-flex items-center gap-1">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label="Edit pickup"
-          title="Edit"
+        <ActionButton
+          icon={Pencil}
+          label="Edit"
+          tone="default"
+          disabled={Boolean(running)}
           onClick={() => handleEdit(p)}
-        >
-          <Pencil className="size-4" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label="Archive pickup"
-          title="Archive"
+        />
+        <ActionButton
+          icon={Archive}
+          label="Archive"
+          tone="muted"
+          loading={running === "archive"}
+          disabled={Boolean(running)}
           onClick={() => handleArchive(p)}
-        >
-          <Archive className="size-4" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label="Delete pickup"
-          title="Delete"
+        />
+        <ActionButton
+          icon={Trash2}
+          label="Delete"
+          tone="danger"
+          loading={running === "delete"}
+          disabled={Boolean(running)}
           onClick={() => handleDelete(p)}
-          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-        >
-          <Trash2 className="size-4" />
-        </Button>
+        />
       </div>
     ) : (
       <span className="text-xs text-muted-foreground">Locked</span>
     );
+  };
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 pt-8 pb-10 md:px-6">
@@ -604,7 +640,7 @@ export function PickupScheduleView() {
                 <option value="">-- Unassigned --</option>
                 {staffList.map((s) => (
                   <option key={s.id ?? s._id} value={s.id ?? s._id}>
-                    {s.name}
+                    {s.name}{s.hasPhone === false ? " (no phone: SMS won't send)" : ""}
                   </option>
                 ))}
               </SelectBox>
@@ -700,7 +736,7 @@ export function PickupScheduleView() {
                 description="Use the form above to add one, or pick another date."
               />
             ) : (
-              activePickups.map((p) => {
+              activePaged.rows.map((p) => {
                 const shop = resolveShop(p.supplierId);
                 return (
                   <TableRow key={p._id}>
@@ -746,6 +782,7 @@ export function PickupScheduleView() {
             )}
           </TableBody>
         </Table>
+        <TablePager {...activePaged} />
       </SectionCard>
 
       {/* Upcoming — other dates */}
@@ -777,7 +814,7 @@ export function PickupScheduleView() {
                 description="Pickups scheduled for other days will show up here."
               />
             ) : (
-              upcomingPickups.map((p) => {
+              upcomingPaged.rows.map((p) => {
                 const shop = resolveShop(p.supplierId);
                 return (
                   <TableRow key={p._id}>
@@ -812,6 +849,7 @@ export function PickupScheduleView() {
             )}
           </TableBody>
         </Table>
+        <TablePager {...upcomingPaged} />
       </SectionCard>
 
       {/* Past records */}
@@ -842,7 +880,7 @@ export function PickupScheduleView() {
                 description="Completed and past pickups will appear here."
               />
             ) : (
-              pastPickups.map((p) => (
+              pastPaged.rows.map((p) => (
                 <TableRow key={p._id}>
                   <TableCell className="pl-5 tabular-nums">
                     {formatPickupDate(p.scheduledDate, "MMM d, yyyy")}
@@ -865,6 +903,7 @@ export function PickupScheduleView() {
             )}
           </TableBody>
         </Table>
+        <TablePager {...pastPaged} />
       </SectionCard>
 
       {/* Archived */}
@@ -895,7 +934,7 @@ export function PickupScheduleView() {
                 description="Archive a scheduled pickup to keep it here without deleting it."
               />
             ) : (
-              archivedPickups.map((p) => (
+              archivedPaged.rows.map((p) => (
                 <TableRow key={p._id}>
                   <TableCell className="pl-5 tabular-nums">
                     {formatPickupDate(p.scheduledDate, "MMM d, yyyy")}
@@ -912,27 +951,22 @@ export function PickupScheduleView() {
                   </TableCell>
                   <TableCell className="pr-5 text-right">
                     <div className="inline-flex items-center gap-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Restore pickup"
-                        title="Restore"
-                        onClick={() => void handleRestore(p)}
-                      >
-                        <ArchiveRestore className="size-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Delete pickup permanently"
-                        title="Delete permanently"
+                      <ActionButton
+                        icon={ArchiveRestore}
+                        label="Restore"
+                        tone="success"
+                        loading={pending[p._id] === "restore"}
+                        disabled={Boolean(pending[p._id])}
+                        onClick={() => track(p._id, "restore", () => handleRestore(p))}
+                      />
+                      <ActionButton
+                        icon={Trash2}
+                        label="Delete"
+                        tone="danger"
+                        loading={pending[p._id] === "delete"}
+                        disabled={Boolean(pending[p._id])}
                         onClick={() => handleDelete(p)}
-                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
+                      />
                     </div>
                   </TableCell>
                 </TableRow>
@@ -940,6 +974,7 @@ export function PickupScheduleView() {
             )}
           </TableBody>
         </Table>
+        <TablePager {...archivedPaged} />
       </SectionCard>
     </div>
   );

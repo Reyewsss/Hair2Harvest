@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import Audit from "../audit/auditModel.js";
 import { recordAudit } from "../audit/auditController.js";
+import { current } from "../security/securitySettings.js";
 import { validatePassword } from "./utils/passwordPolicy.js";
 import { COOKIE_NAME, generateTokenAndSetCookie } from "./utils/generateTokenAndSetCookie.js";
 
@@ -43,7 +44,7 @@ export const updateProfile = async (req, res) => {
 function sessionWasRemembered(req) {
   try {
     const { iat, exp } = jwt.decode(req.cookies?.[COOKIE_NAME]) ?? {};
-    const sessionSeconds = (Number(process.env.SESSION_HOURS) || 8) * 3600;
+    const sessionSeconds = current().sessionHours * 3600;
     return Boolean(iat && exp && exp - iat > sessionSeconds);
   } catch {
     return false;

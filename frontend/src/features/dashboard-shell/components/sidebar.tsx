@@ -28,7 +28,7 @@ import {
 } from "@/shared/ui/sidebar";
 import { workspaceNavigation, type NavigationItem } from "../data";
 import { useAuth } from "@/features/auth/context/auth-context";
-import { ROLE_LABELS, canAccessPath } from "@/features/auth/permissions";
+import { ROLE_LABELS, canAccessPath, isAdminRole } from "@/features/auth/permissions";
 // Adjust this path to where your inventory folder lives.
 import {
   INVENTORY_HREF,
@@ -111,7 +111,7 @@ function NavItem({ item }: { item: NavigationItem }) {
   // The Accounts tab shows the real number of accounts (admins only, matching the page itself).
   const isAccountsItem = item.href === "/accounts";
   const accountCount = useAccountCount(
-    isAccountsItem && user?.role === "admin",
+    isAccountsItem && isAdminRole(user?.role),
     pathname,
   );
   const badge = isAccountsItem
@@ -341,7 +341,7 @@ const navigationSections: { label: string; hrefs: string[] }[] = [
     label: "Operations",
     hrefs: ["/suppliers", "/inventory", "/machine", "/composting"],
   },
-  { label: "Management", hrefs: ["/accounts", "/reports"] },
+  { label: "Management", hrefs: ["/accounts", "/security", "/reports"] },
 ];
 
 function groupNavigation(items: NavigationItem[]) {

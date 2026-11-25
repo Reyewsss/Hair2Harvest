@@ -5,6 +5,7 @@ import { DashboardTopbar } from "./components/topbar";
 import { useDashboardNavigation } from "./components/navigation";
 import { SidebarProvider } from "@/shared/ui/sidebar";
 import { useAuth } from "@/features/auth/context/auth-context";
+import { isAdminRole } from "@/features/auth/permissions";
 import { openModal, closeModal } from "@/shared/ui/modal";
 import { Button } from "@/shared/ui/button";
 import "./dashboard.css";
@@ -23,7 +24,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     if (loading) return;
 
     // 2. Only for signed-in admins
-    if (!user || user.role !== "admin") return;
+    if (!user || !isAdminRole(user.role)) return;
 
     // 3. Only skip if the modal was *actually dismissed* before
     if (sessionStorage.getItem(WELCOME_KEY)) return;

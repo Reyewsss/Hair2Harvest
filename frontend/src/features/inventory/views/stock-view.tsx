@@ -23,6 +23,7 @@ import {
   SummaryCard,
 } from "../components/inventory-shared";
 import { useSuppliers } from "@/features/suppliers/store/suppliers-store";
+import { TablePager, usePaged } from "@/shared/ui/table-pager";
 
 type TypeFilter = "all" | LogType;
 
@@ -32,8 +33,6 @@ const typeOptions: { value: TypeFilter; label: string }[] = [
   { value: "rejected", label: "Rejected" },
   { value: "processed", label: "Processed" },
 ];
-
-const LIMIT = 15;
 
 export function StockView({
   logs = [],
@@ -69,6 +68,8 @@ export function StockView({
     [logs, filter],
   );
 
+  const paged = usePaged(rows); // 10 rows per page
+
   return (
     <section className="flex flex-col gap-8">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -76,14 +77,24 @@ export function StockView({
           label="Sacks on hand"
           value={fmtSacks(onHand)}
           note="Received minus processed"
+          hint={"Raw-hair sacks currently stored at the site.\nAll sacks received, minus the sacks taken out for composting batches."}
         />
         <SummaryCard
           label="Awaiting delivery"
           value={fmtSacks(awaiting)}
           note="Collected, not yet at the site"
+          hint={"Sacks staff have already collected from shops but that haven't been delivered yet.\nThey join the stock once delivery is verified."}
         />
-        <SummaryCard label="Received, last 30 days" value={fmtSacks(received30)} />
-        <SummaryCard label="Rejected, last 30 days" value={fmtSacks(rejected30)} />
+        <SummaryCard
+          label="Received, last 30 days"
+          value={fmtSacks(received30)}
+          hint="Sacks logged as received in the last 30 days (rejected sacks are not counted)."
+        />
+        <SummaryCard
+          label="Rejected, last 30 days"
+          value={fmtSacks(rejected30)}
+          hint="Sacks turned away at the site in the last 30 days, for example for contamination."
+        />
       </div>
 
       <div className="flex flex-col gap-5">
@@ -97,7 +108,10 @@ export function StockView({
           <FilterDropdown
             value={filter}
             options={typeOptions}
-            onChange={setFilter}
+            onChange={(value) => {
+              setFilter(value);
+              paged.setPage(1);
+            }}
             align="end"
           />
         </div>
@@ -123,7 +137,7 @@ export function StockView({
             {rows.length === 0 ? (
               <EmptyRow colSpan={5}>No entries yet.</EmptyRow>
             ) : (
-              rows.slice(0, LIMIT).map((l) => (
+              paged.rows.map((l) => (
                 <TableRow key={l.id}>
                   <TableCell className="text-muted-foreground">
                     {formatDate(l.date)}
@@ -146,11 +160,7 @@ export function StockView({
             )}
           </TableBody>
         </Table>
-        {rows.length > LIMIT ? (
-          <p className="text-sm text-muted-foreground">
-            Showing the latest {LIMIT} of {rows.length} entries.
-          </p>
-        ) : null}
+        <TablePager {...paged} />
       </div>
     </section>
   );

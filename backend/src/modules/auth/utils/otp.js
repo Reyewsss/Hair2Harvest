@@ -1,8 +1,7 @@
 import crypto from "node:crypto";
+import { current } from "../../security/securitySettings.js";
 
-export const OTP_TTL_MS = 10 * 60 * 1000; // a code is valid for 10 minutes
-export const OTP_MAX_ATTEMPTS = 5; // wrong guesses before the code is dead
-export const OTP_RESEND_MS = 60 * 1000; // minimum gap between emails
+// Code lifetime, wrong-guess limit and resend gap come from the admin security settings.
 
 // Codes are stored as an HMAC, never in plain text.
 const digest = (userId, code) =>
@@ -16,7 +15,7 @@ export async function issueOtp(user, purpose) {
   user.otp = {
     hash: digest(user.id, code),
     purpose,
-    expiresAt: new Date(Date.now() + OTP_TTL_MS),
+    expiresAt: new Date(Date.now() + current().otpTtlMinutes * 60_000),
     attempts: 0,
     sentAt: new Date(),
   };
@@ -28,13 +27,13 @@ export async function issueOtp(user, purpose) {
 export const canSendOtp = (user, purpose) =>
   !user.otp?.sentAt ||
   user.otp.purpose !== purpose ||
-  Date.now() - new Date(user.otp.sentAt).getTime() >= OTP_RESEND_MS;
+  Date.now() - new Date(user.otp.sentAt).getTime() >= current().otpResendSeconds * 1000;
 
 /** Checks a submitted code. A correct code is consumed, so it works only once. */
 export async function checkOtp(user, code, purpose) {
   const otp = user.otp;
   if (!otp?.hash || otp.purpose !== purpose) return false;
-  if (new Date(otp.expiresAt) < new Date() || otp.attempts >= OTP_MAX_ATTEMPTS) return false;
+  if (new Date(otp.expiresAt) < new Date() || otp.attempts >= current().otpMaxAttempts) return false;
 
   const expected = Buffer.from(otp.hash, "hex");
   const actual = Buffer.from(digest(user.id, String(code)), "hex");

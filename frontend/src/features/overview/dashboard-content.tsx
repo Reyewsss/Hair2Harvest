@@ -1,3 +1,4 @@
+import { isAdminRole } from "@/features/auth/permissions";
 import { useEffect, useRef, useState } from "react";
 import {
   BadgeCheck,
@@ -61,7 +62,9 @@ import {
   formatPickupTime,
 } from "@/features/suppliers/components/pickup-ui";
 import { AnimatedNumber } from "@/shared/ui/animated-number";
-import { LeafLoader } from "@/shared/ui/leaf-loader";
+import { Skeleton } from "@/shared/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/shared/ui/tooltip";
+import { ListSkeleton, TableRowsSkeleton } from "@/shared/ui/page-skeleton";
 import { KG_PER_SACK, useSimulation } from "@/features/simulation/sim-store";
 
 const PAGE_SIZE = 10;
@@ -109,6 +112,11 @@ export function DashboardContent({ role = "admin" }: { role?: Role }) {
       .finally(() => setLoading(false));
   }, []);
 
+  const machineLines = sim.machines
+    .map((m) => `
+${m.name ?? m.id}: ${!m.online ? "offline" : m.motor}`)
+    .join("");
+
   const metricsMap: Record<MetricId, MetricCard> = {
     suppliers: {
       id: "suppliers",
@@ -117,6 +125,11 @@ export function DashboardContent({ role = "admin" }: { role?: Role }) {
       footnote: loading
         ? undefined
         : `${data?.suppliers.pending ?? 0} pending review`,
+      hint: loading
+        ? undefined
+        : `Every registered shop.
+${data?.suppliers.approved ?? 0} approved and enrolled
+${data?.suppliers.pending ?? 0} waiting for review`,
     },
     pickups: {
       id: "pickups",
@@ -125,6 +138,11 @@ export function DashboardContent({ role = "admin" }: { role?: Role }) {
       footnote: loading
         ? undefined
         : `${data?.pickups.dueToday ?? 0} due today, ${data?.pickups.overdue ?? 0} overdue`,
+      hint: loading
+        ? undefined
+        : `Pickups that are scheduled or collected but not yet delivered.
+${data?.pickups.dueToday ?? 0} due today
+${data?.pickups.overdue ?? 0} overdue`,
     },
     batches: {
       id: "batches",
@@ -133,12 +151,15 @@ export function DashboardContent({ role = "admin" }: { role?: Role }) {
       footnote: activeBatches.length
         ? `${activeBatches.filter((b) => b.stage === "composting").length} composting · test machines`
         : "No batch running",
+      hint: `Composting batches currently in progress on the test machines.
+${activeBatches.length} active, ${activeBatches.filter((b) => b.stage === "composting").length} composting`,
     },
     materials: {
       id: "materials",
       label: "Approved Materials",
       value: loading ? "..." : String(data?.suppliers.approved ?? 0),
       trend: { tone: "positive", value: "+2", label: "this week" },
+      hint: "Shops approved to supply hair waste. Only approved shops can be scheduled for pickups.",
     },
     machines: {
       id: "machines",
@@ -148,6 +169,7 @@ export function DashboardContent({ role = "admin" }: { role?: Role }) {
         const faults = sim.machines.filter((m) => m.motor === "fault").length;
         return faults ? `${faults} fault${faults === 1 ? "" : "s"} · running` : "running (test machines)";
       })(),
+      hint: `Machines running or mixing right now (test machines).${machineLines}`,
       segments: sim.machines.map((m): MachineState =>
         m.motor === "fault" || !m.online ? "maint" : m.motor === "stopped" ? "idle" : "run",
       ),
@@ -157,6 +179,7 @@ export function DashboardContent({ role = "admin" }: { role?: Role }) {
       label: "Experiment Progress",
       value: "0%",
       footnote: "No data yet",
+      hint: "Overall progress of the composting experiment. No experiment data has been recorded yet.",
       progress: 0,
     },
   };
@@ -204,7 +227,7 @@ export function DashboardContent({ role = "admin" }: { role?: Role }) {
           <StreamSection table={streamTables[config.table]} />
         )
       ) : null}
-      {userRole === "admin" ? <AuditSection /> : null}
+      {isAdminRole(user?.role) ? <AuditSection /> : null}
     </div>
   );
 }
@@ -304,8 +327,11 @@ const segmentTone: Record<MachineState, string> = {
 function MetricCardItem({ metric }: { metric: MetricCard }) {
   const Icon = metricIcons[metric.id];
 
-  return (
-    <article className="rounded-xl border bg-card p-3 md:p-4 min-w-0">
+  const card = (
+    <article
+      tabIndex={metric.hint ? 0 : undefined}
+      className="rounded-xl border bg-card p-3 md:p-4 min-w-0 transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:outline-none"
+    >
       <div className="flex flex-col gap-5 md:gap-8">
         <div className="flex items-center gap-2 md:gap-3">
           <div className="flex size-7 items-center justify-center rounded-lg border md:size-8">
@@ -318,7 +344,7 @@ function MetricCardItem({ metric }: { metric: MetricCard }) {
 
         <div className="flex flex-col gap-2 md:gap-3 break-words min-w-0">
           <p className="text-[1.625rem] leading-none font-semibold md:text-[2rem]">
-            <AnimatedNumber value={metric.value} />
+            {metric.value === "..." ? <Skeleton className="h-8 w-20 md:h-9" /> : <AnimatedNumber value={metric.value} />}
           </p>
 
           {metric.trend ? (
@@ -374,6 +400,16 @@ function MetricCardItem({ metric }: { metric: MetricCard }) {
         </div>
       </div>
     </article>
+  );
+
+  if (!metric.hint) return card;
+  return (
+    <Tooltip>
+      <TooltipTrigger render={card} />
+      <TooltipContent side="bottom" className="max-w-64 whitespace-pre-line text-left">
+        {metric.hint}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -710,7 +746,7 @@ function PickupsDueSection({ table }: { table: StreamTable }) {
 
   const shown = due.slice(0, 6);
   const emptyText = loading
-    ? <LeafLoader label="Loading pickups" />
+    ? <ListSkeleton rows={3} />
     : failed
       ? "Couldn't load pickups."
       : "No pickups due. You're all caught up.";
@@ -1051,14 +1087,7 @@ function AuditSection() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow>
-                <TableCell
-                  colSpan={6}
-                  className="py-10! text-center text-muted-foreground"
-                >
-                  <LeafLoader label="Loading audit trail" />
-                </TableCell>
-              </TableRow>
+              <TableRowsSkeleton colSpan={6} rows={5} />
             ) : paginatedEntries.length === 0 ? (
               <TableRow>
                 <TableCell

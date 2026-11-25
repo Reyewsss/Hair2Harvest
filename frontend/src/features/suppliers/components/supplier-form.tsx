@@ -122,6 +122,10 @@ export function SupplierForm({
   const [pinMoved, setPinMoved] = useState(
     initial?.lat !== undefined && initial?.lng !== undefined && !initial?.pinApproximate,
   );
+  // The map pin is optional: a shop can be saved without any map location.
+  const [noPin, setNoPin] = useState(
+    isEdit && !(Number.isFinite(initial?.lat) && Number.isFinite(initial?.lng)),
+  );
   const [geoLoading, setGeoLoading] = useState(false);
   const [matches, setMatches] = useState<GeocodeMatch[]>([]);
   const [chosen, setChosen] = useState<GeocodeMatch | null>(null);
@@ -137,7 +141,7 @@ export function SupplierForm({
   // Look the street up (debounced; Nominatim allows ~1 request/second). Unit/floor isn't
   // part of the lookup, see geocode.ts.
   useEffect(() => {
-    if (pinMoved || street.trim().length < 3) return;
+    if (noPin || pinMoved || street.trim().length < 3) return;
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       setGeoLoading(true);
@@ -156,14 +160,18 @@ export function SupplierForm({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [street, pinMoved]);
+  }, [street, pinMoved, noPin]);
 
   const errors = {
     shopName: shopName.trim() ? "" : "Enter the shop name.",
     // 👇 New validations
     firstName: firstName.trim() ? "" : "Enter the first name.",
     lastName: lastName.trim() ? "" : "Enter the last name.",
-    email: email.trim() ? "" : "Enter an email address.",
+    // Optional, but if something is typed it has to look like an email.
+    email:
+      !email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+        ? ""
+        : "Enter a valid email address, or leave it blank.",
     phone: PH_LOCAL_DIGITS.test(phoneLocal)
       ? ""
       : "Enter 10 digits after +63, starting with 1–9 (e.g. 917 123 4567).",
@@ -250,12 +258,16 @@ export function SupplierForm({
       JSON.stringify({ days: "Mon-Sat", open: windowStart, close: windowEnd }),
     );
 
-    formData.append("lat", String(pinLat));
-    formData.append("lng", String(pinLng));
-    // Send the pin the user saw whenever it's a real location: dragged/clicked, or
-    // auto-located from the street. (Sending "false" for auto-located pins made the server
-    // re-geocode with a worse query and drop most shops on one fallback point.)
-    formData.append("pinManuallySet", String(pinMoved || !!chosen));
+    if (noPin) {
+      formData.append("noPin", "true");
+    } else {
+      formData.append("lat", String(pinLat));
+      formData.append("lng", String(pinLng));
+      // Send the pin the user saw whenever it's a real location: dragged/clicked, or
+      // auto-located from the street. (Sending "false" for auto-located pins made the server
+      // re-geocode with a worse query and drop most shops on one fallback point.)
+      formData.append("pinManuallySet", String(pinMoved || !!chosen));
+    }
 
     if (!isEdit) {
       formData.append("registrationSource", REGISTRATION_SOURCE.ADMIN);
@@ -331,7 +343,7 @@ export function SupplierForm({
               </Field>
             </div>
 
-            <Field label="Email">
+            <Field label="Email (optional)">
               <input
                 type="email"
                 className={input(show("email"))}
@@ -422,7 +434,9 @@ export function SupplierForm({
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium">Pin location</p>
                 <span className="text-xs text-muted-foreground">
-                  {geoLoading
+                  {noPin
+                    ? "No pin"
+                    : geoLoading
                     ? "Finding address..."
                     : pinMoved
                       ? "Custom pin"
@@ -433,6 +447,21 @@ export function SupplierForm({
                           : "Enter a street"}
                 </span>
               </div>
+              <label className="flex cursor-pointer items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="size-4 accent-[var(--primary)]"
+                  checked={noPin}
+                  onChange={(e) => setNoPin(e.target.checked)}
+                />
+                Don't set a map pin (optional)
+              </label>
+              {noPin ? (
+                <p className="text-xs text-muted-foreground">
+                  The shop is saved without a map location. You can add a pin later by editing it.
+                </p>
+              ) : (
+              <>
               <p className="text-xs text-muted-foreground">
                 Drag the pin or click anywhere on the map to set the exact spot.
                 Use this when the auto-pin is off.
@@ -515,6 +544,8 @@ export function SupplierForm({
                   </button>
                 )}
               </div>
+              </>
+              )}
             </div>
           </fieldset>
 

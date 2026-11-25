@@ -35,12 +35,15 @@ export const upload = multer({
 });
 
 /** Saves an uploaded consent PDF and returns the reference to store in the DB. */
-export async function saveConsentDocument(file) {
-  const name = `${Date.now()}-${Math.round(Math.random() * 1e9)}.pdf`;
+export const saveConsentDocument = (file) => saveStoredFile(file, "consent_forms", "pdf");
+
+/** Saves a private upload under uploads/<folder> (or a private Vercel Blob) and returns its reference. */
+export async function saveStoredFile(file, folder, ext) {
+  const name = `${Date.now()}-${Math.round(Math.random() * 1e9)}.${ext}`;
   if (useBlob()) {
-    const blob = await put(`consent_forms/${name}`, file.buffer, {
+    const blob = await put(`${folder}/${name}`, file.buffer, {
       access: "private",
-      contentType: "application/pdf",
+      contentType: file.mimetype,
       addRandomSuffix: true,
     });
     return blob.url;
@@ -51,7 +54,7 @@ export async function saveConsentDocument(file) {
       "File storage isn't configured. Connect a Vercel Blob store to the backend project (sets BLOB_STORE_ID or BLOB_READ_WRITE_TOKEN) and redeploy.",
     );
   }
-  const stored = `uploads/consent_forms/${name}`;
+  const stored = `uploads/${folder}/${name}`;
   await fs.mkdir(path.dirname(localPath(stored)), { recursive: true });
   await fs.writeFile(localPath(stored), file.buffer);
   return stored;

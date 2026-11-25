@@ -7,6 +7,7 @@ interface InventoryState {
 }
 
 let state: InventoryState = { logs: [] };
+let loadedOnce = false; // after the first load, pages show the logs at once and refresh behind them
 const listeners = new Set<() => void>();
 
 const update = (fn: (s: InventoryState) => InventoryState) => {
@@ -24,7 +25,7 @@ const getSnapshot = () => state;
 
 export function useInventory() {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!loadedOnce);
 
   useEffect(() => {
     inventoryApi
@@ -34,7 +35,10 @@ export function useInventory() {
         console.error(err);
         update(() => ({ logs: [] }));
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        loadedOnce = true;
+        setLoading(false);
+      });
   }, []);
 
   return { ...snapshot, loading };

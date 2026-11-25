@@ -257,3 +257,6 @@ export function TableSkeleton({
     </>
   );
 }
+
+// Shared 10-rows-per-table paging; re-exported so existing imports keep working.
+export { TABLE_PAGE_SIZE, TablePager, usePaged } from "@/shared/ui/table-pager";

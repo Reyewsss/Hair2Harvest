@@ -15,7 +15,10 @@ import { STAGES, type BatchStage } from "@/features/composting/data/composting-d
  * - The batch is measured in kg. Inventory is counted in sacks, so starting a batch
  *   deducts ceil(kg ÷ KG_PER_SACK) sacks. Weight drops with microbial activity.
  * - Stages advance on their own after their duration; completed batches free
- *   the machine.
+ *   the machine. The composting and curing clocks only run while the motor is
+ *   running: composting never starts, and never moves, with the machine stopped.
+ *   Sampling is where the machine stops: the motor is shut off on entering it.
+ * - NPK (% of dry matter) rises as the batch matures and is recorded in the logs.
  * - Safety: > 72 °C trips an overheat fault; opening the lid while the motor
  *   runs trips the interlock. Faults can also be injected for testing.
  */
@@ -51,6 +54,10 @@ export interface SimLog {
   temp: number | null;
   weight: number | null; // kg
   moisture: number | null;
+  /** Nutrient content, % of dry matter. Absent on logs written before NPK was tracked. */
+  n?: number | null;
+  p?: number | null;
+  k?: number | null;
 }
 
 export interface SimBatch {
@@ -66,6 +73,13 @@ export interface SimBatch {
   temp: number;
   stage: BatchStage;
   stageStartedAt: number;
+  /** Simulated seconds that counted toward the current stage. Composting and curing
+   *  only count while the machine motor is on. */
+  stageElapsed: number;
+  /** Nutrients, % of dry matter. */
+  n: number;
+  p: number;
+  k: number;
   createdAt: number;
   lastSampleAt: number;
   logs: SimLog[]; // newest first
@@ -110,6 +124,56 @@ const SAMPLE_EVERY = 6 * HOUR;
 const HISTORY_POINTS = 60;
 const STORAGE_KEY = "h2h-sim-v3"; // v3: batch input in kg (inventory still in sacks)
 
+/** Stages that only progress while the machine motor is running. */
+const MOTOR_STAGES: BatchStage[] = ["composting", "curing"];
+/** Stages where the machine is stopped (sampling onward). */
+const STOPPED_STAGES: BatchStage[] = ["sampling", "quality review"];
+
+export const isStoppedStage = (stage: BatchStage) => STOPPED_STAGES.includes(stage);
+
+export const motorOn = (m?: { motor: MotorState } | null) => m?.motor === "running" || m?.motor === "mixing";
+
+// Nutrient content at the start of a batch (raw hair) and when fully matured.
+const NPK_START = { n: 1.1, p: 0.25, k: 0.35 };
+const NPK_END = { n: 2.4, p: 0.7, k: 1.1 };
+
+/** 0-1: how far along the batch is overall, for the nutrient curve. */
+function maturity(stage: BatchStage, elapsed: number) {
+  const p = Number.isFinite(STAGE_DURATION[stage]) ? clamp(elapsed / STAGE_DURATION[stage], 0, 1) : 1;
+  switch (stage) {
+    case "preparation":
+      return 0;
+    case "composting":
+      return 0.55 * p;
+    case "curing":
+      return 0.55 + 0.35 * p;
+    case "sampling":
+      return 0.9 + 0.05 * p;
+    case "quality review":
+      return 0.95 + 0.05 * p;
+    default:
+      return 1;
+  }
+}
+
+const npkAt = (stage: BatchStage, elapsed: number) => {
+  const t = maturity(stage, elapsed);
+  const lerp = (a: number, b: number) => Math.round((a + (b - a) * t) * 100) / 100;
+  return { n: lerp(NPK_START.n, NPK_END.n), p: lerp(NPK_START.p, NPK_END.p), k: lerp(NPK_START.k, NPK_END.k) };
+};
+
+/** What a batch is doing right now, for the UI. */
+export type BatchActivity = "waiting-machine" | "paused" | "running" | "sampling-stop" | "done";
+export function batchActivity(b: SimBatch, m: SimMachine | undefined): BatchActivity {
+  if (b.stage === "completed") return "done";
+  if (STOPPED_STAGES.includes(b.stage)) return "sampling-stop";
+  if (b.stage === "preparation") {
+    const ready = b.stageElapsed >= STAGE_DURATION.preparation;
+    return ready && !motorOn(m) ? "waiting-machine" : "running";
+  }
+  return motorOn(m) ? "running" : "paused";
+}
+
 /** Standard raw-hair sack weight used to turn a kg compost input into inventory sacks. */
 export const KG_PER_SACK = 5;
 /** Sacks to take from inventory for `kg` of raw hair (a partly used sack counts as one). */
@@ -138,6 +202,8 @@ function seed(): SimState {
     temp: 58.5,
     stage: "composting",
     stageStartedAt: now - ms(3 * DAY),
+    stageElapsed: 3 * DAY,
+    ...npkAt("composting", 3 * DAY),
     createdAt: started,
     lastSampleAt: now,
     logs: [
@@ -197,7 +263,14 @@ function load(): SimState {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as SimState;
-      if (parsed?.version === 1) return parsed;
+      if (parsed?.version === 1) {
+        parsed.batches = parsed.batches.map((b) => {
+          if (typeof b.stageElapsed === "number") return b;
+          const stageElapsed = Math.max(0, (parsed.clock - b.stageStartedAt) / 1000);
+          return { ...b, stageElapsed, ...npkAt(b.stage, stageElapsed) };
+        });
+        return parsed;
+      }
     }
   } catch {
     /* private mode or corrupt data: start fresh */
@@ -236,9 +309,8 @@ export function useSimulation() {
 
 /* ── Physics ──────────────────────────────────────────────────────────── */
 
-function targetTemp(b: SimBatch, m: SimMachine | undefined, clock: number) {
-  const elapsed = (clock - b.stageStartedAt) / 1000;
-  const p = clamp(elapsed / STAGE_DURATION[b.stage], 0, 1);
+function targetTemp(b: SimBatch, m: SimMachine | undefined) {
+  const p = clamp(b.stageElapsed / STAGE_DURATION[b.stage], 0, 1);
   let t: number;
   switch (b.stage) {
     case "preparation":
@@ -264,10 +336,10 @@ function targetTemp(b: SimBatch, m: SimMachine | undefined, clock: number) {
   return t;
 }
 
-function stepBatch(b: SimBatch, m: SimMachine | undefined, clock: number, h: number): SimBatch {
+function stepBatch(b: SimBatch, m: SimMachine | undefined, _clock: number, h: number): SimBatch {
   if (b.stage === "completed") return b;
   const k = 1 - Math.exp(-h / HOUR);
-  const temp = b.temp + (targetTemp(b, m, clock) - b.temp) * k;
+  const temp = b.temp + (targetTemp(b, m) - b.temp) * k;
   const mixing = m?.motor === "mixing";
   // % moisture lost per hour: ~0.5%/day cool, ~2.7%/day at 58 °C, more while turning.
   const evap = (0.02 + Math.max(0, temp - 35) * 0.004 + (mixing ? 0.2 : 0)) * (h / HOUR);
@@ -277,7 +349,16 @@ function stepBatch(b: SimBatch, m: SimMachine | undefined, clock: number, h: num
 }
 
 function addLog(b: SimBatch, event: string, clock: number): SimBatch {
-  const log: SimLog = { t: clock, event, temp: round1(b.temp), weight: round1(b.weight), moisture: round1(b.moisture) };
+  const log: SimLog = {
+    t: clock,
+    event,
+    temp: round1(b.temp),
+    weight: round1(b.weight),
+    moisture: round1(b.moisture),
+    n: b.n,
+    p: b.p,
+    k: b.k,
+  };
   return { ...b, logs: [log, ...b.logs].slice(0, 60) };
 }
 
@@ -301,12 +382,22 @@ function tick(prev: SimState, seconds: number): SimState {
     s.batches = s.batches.map((b) => {
       const m = s.machines.find((x) => x.id === b.machineId);
       let next = stepBatch(b, m, s.clock, h);
-      // Stage progression
-      const elapsed = (s.clock - next.stageStartedAt) / 1000;
-      if (next.stage !== "completed" && elapsed >= STAGE_DURATION[next.stage]) {
+      if (next.stage === "completed") return next;
+      // The stage clock: composting and curing only count while the motor is on.
+      const counts = !MOTOR_STAGES.includes(next.stage) || motorOn(m);
+      next = { ...next, stageElapsed: next.stageElapsed + (counts ? h : 0) };
+      // Stage progression. Composting never starts with the machine stopped:
+      // preparation waits at 100% until the motor is running.
+      if (next.stageElapsed >= STAGE_DURATION[next.stage]) {
         const stage = STAGES[STAGES.indexOf(next.stage) + 1];
-        next = addLog({ ...next, stage, stageStartedAt: s.clock }, `Stage → ${stage}`, s.clock);
+        if (stage === "composting" && !motorOn(m)) {
+          next = { ...next, stageElapsed: STAGE_DURATION[next.stage] };
+        } else {
+          next = { ...next, stage, stageStartedAt: s.clock, stageElapsed: 0 };
+          next = addLog({ ...next, ...npkAt(stage, 0) }, `Stage → ${stage}`, s.clock);
+        }
       }
+      next = { ...next, ...npkAt(next.stage, next.stageElapsed) };
       // Periodic sensor reading
       if (next.stage !== "completed" && s.clock - next.lastSampleAt >= SAMPLE_EVERY * 1000) {
         next = addLog({ ...next, lastSampleAt: s.clock }, "Sensor reading", s.clock);
@@ -321,6 +412,12 @@ function tick(prev: SimState, seconds: number): SimState {
         s = closeSession(s, m);
         Object.assign(m, { batchId: null, motor: m.motor === "fault" ? "fault" : "stopped", sessionId: null, mixUntil: null });
         s.batches = s.batches.map((b) => (b.id === batch.id ? { ...b, machineId: null } : b));
+      }
+      // Sampling is where the machine stops: shut the motor off and keep it off.
+      if (batch && STOPPED_STAGES.includes(batch.stage) && motorOn(m)) {
+        s = closeSession(s, m);
+        Object.assign(m, { motor: "stopped", sessionId: null, mixUntil: null });
+        s = logToBatch(s, batch.id, `Motor stopped: ${batch.stage} stage`);
       }
       if (m.motor === "mixing" && m.mixUntil !== null && s.clock >= m.mixUntil) {
         m.motor = "running";
@@ -372,6 +469,14 @@ function updateMachine(id: string, fn: (m: SimMachine, s: SimState) => SimState 
   commit(fn(m, s) ?? s);
 }
 
+/** The machine stays off from sampling onward, so the motor can't be started then. */
+function assertMotorAllowed(s: SimState, m: SimMachine) {
+  const batch = s.batches.find((b) => b.id === m.batchId);
+  if (batch && STOPPED_STAGES.includes(batch.stage)) {
+    throw new Error(`The machine stays stopped during the ${batch.stage} stage.`);
+  }
+}
+
 function logToBatch(s: SimState, batchId: string | null, event: string): SimState {
   if (!batchId) return s;
   return { ...s, batches: s.batches.map((b) => (b.id === batchId ? addLog(b, event, s.clock) : b)) };
@@ -388,6 +493,7 @@ export const sim = {
   startMotor: (id: string, operator: string) =>
     updateMachine(id, (m, s) => {
       if (m.motor === "running" || m.motor === "mixing" || m.fault || m.lidOpen) return;
+      assertMotorAllowed(s, m);
       const session: SimSession = {
         id: `SES-${String(s.sessions.length + 1).padStart(4, "0")}`,
         machineId: m.id,
@@ -413,6 +519,7 @@ export const sim = {
   mix: (id: string, operator: string) =>
     updateMachine(id, (m, s) => {
       if (m.fault || m.lidOpen) return;
+      assertMotorAllowed(s, m);
       let next = s;
       if (!m.sessionId) {
         const session: SimSession = {
@@ -480,6 +587,8 @@ export const sim = {
       temp: AMBIENT,
       stage: "preparation",
       stageStartedAt: state.clock,
+      stageElapsed: 0,
+      ...npkAt("preparation", 0),
       createdAt: state.clock,
       lastSampleAt: state.clock,
       logs: [
@@ -489,6 +598,7 @@ export const sim = {
           temp: AMBIENT,
           weight: input.kg,
           moisture: 60,
+          ...npkAt("preparation", 0),
         },
       ],
     };
@@ -510,15 +620,32 @@ export const sim = {
     }),
 
   /** Testing shortcut: move a batch to its next stage now. */
-  advanceStage: (batchId: string) =>
-    commit({
+  advanceStage: (batchId: string) => {
+    const b = state.batches.find((x) => x.id === batchId);
+    if (!b || b.stage === "completed") return;
+    const stage = STAGES[STAGES.indexOf(b.stage) + 1];
+    const machine = state.machines.find((x) => x.id === b.machineId);
+    if (stage === "composting" && !motorOn(machine)) {
+      throw new Error("Start the machine first: composting only begins while the motor is running.");
+    }
+    let next: SimState = {
       ...state,
-      batches: state.batches.map((b) => {
-        if (b.id !== batchId || b.stage === "completed") return b;
-        const stage = STAGES[STAGES.indexOf(b.stage) + 1];
-        return addLog({ ...b, stage, stageStartedAt: state.clock }, `Stage → ${stage} (manual)`, state.clock);
-      }),
-    }),
+      machines: state.machines.map((x) => ({ ...x })),
+      batches: state.batches.map((x) =>
+        x.id === batchId
+          ? addLog({ ...x, stage, stageStartedAt: state.clock, stageElapsed: 0, ...npkAt(stage, 0) }, `Stage → ${stage} (manual)`, state.clock)
+          : x,
+      ),
+    };
+    // Entering sampling stops the machine.
+    const m = next.machines.find((x) => x.id === b.machineId);
+    if (m && STOPPED_STAGES.includes(stage) && motorOn(m)) {
+      next = closeSession(next, m);
+      Object.assign(m, { motor: "stopped", sessionId: null, mixUntil: null, rpm: 0, powerKw: 0.05 });
+      next = logToBatch(next, batchId, `Motor stopped: ${stage} stage`);
+    }
+    commit(next);
+  },
 
 };
 
@@ -540,5 +667,6 @@ export function formatDuration(ms: number) {
 /** 0–1 progress through the batch's current stage. */
 export function stageProgress(b: SimBatch, clock: number) {
   const d = STAGE_DURATION[b.stage];
-  return Number.isFinite(d) ? clamp((clock - b.stageStartedAt) / 1000 / d, 0, 1) : 1;
+  void clock; // progress is counted in stageElapsed, not wall time
+  return Number.isFinite(d) ? clamp(b.stageElapsed / d, 0, 1) : 1;
 }

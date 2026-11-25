@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { toast } from "sonner";
-import { setUnauthorizedHandler } from "@/lib/api";
+import { clearApiCache, setUnauthorizedHandler } from "@/lib/api";
 import { authApi, type AuthUser } from "../auth-api";
 
 interface AuthContextValue {
@@ -47,12 +47,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // If any later request comes back 401, the session has ended.
   useEffect(() => {
-    setUnauthorizedHandler(() => setUser(null));
+    setUnauthorizedHandler(() => {
+      clearApiCache();
+      setUser(null);
+    });
     return () => setUnauthorizedHandler(null);
   }, []);
 
   const login = useCallback<AuthContextValue["login"]>(
     async (email, password, rememberMe) => {
+      clearApiCache();
       const result = await authApi.login(email, password, rememberMe);
       if ("user" in result) {
         setUser(result.user);
@@ -65,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const verifyLoginOtp = useCallback<AuthContextValue["verifyLoginOtp"]>(
     async (email, code, rememberMe) => {
+      clearApiCache();
       const result = await authApi.verifyLoginOtp(email, code, rememberMe);
       setUser(result.user);
     },
@@ -76,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await authApi.logout();
       toast.success("You have been signed out.");
     } finally {
+      clearApiCache();
       setUser(null);
     }
   }, []);

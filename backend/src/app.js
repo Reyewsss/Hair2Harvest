@@ -11,6 +11,8 @@ import supplierRoutes from "./modules/suppliers/supplierRoutes.js";
 import auditRoutes from "./modules/audit/auditRoutes.js"; 
 import overviewRoutes from "./modules/overview/overviewRoutes.js";
 import inventoryRoutes from "./modules/inventory/inventoryRoutes.js";
+import securityRoutes from "./modules/security/securityRoutes.js";
+import { refreshSettings } from "./modules/security/securitySettings.js";
 
 for (const name of ["JWT_SECRET", "OTP_SECRET", "CLIENT_URL"]) {
   if (!process.env[name]) throw new Error(`${name} is not set. Copy .env.example to .env and fill it in.`);
@@ -40,7 +42,18 @@ app.use("/api", async (_req, _res, next) => {
   }
 });
 
+// Load the admin-configured security settings (cached for a few seconds) before any route runs.
+app.use("/api", async (_req, _res, next) => {
+  try {
+    await refreshSettings();
+  } catch (error) {
+    console.error("Security settings load error:", error.message); // keep serving with the last known values
+  }
+  next();
+});
+
 app.use("/api/auth", authRoutes);
+app.use("/api/security", securityRoutes);
 app.use("/api/accounts", accountsRoutes);
 app.use("/api/suppliers", supplierRoutes); 
 app.use("/api/audit", auditRoutes);

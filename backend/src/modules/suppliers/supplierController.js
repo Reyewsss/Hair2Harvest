@@ -22,6 +22,10 @@ const findSupplier = (identifier) =>
 
 // The form sends the pin shown on its map (auto-located or dragged) with
 // pinManuallySet = "true". Only without one does the server geocode the street itself.
+// The map pin is optional. "noPin" = register/save the shop without any map location.
+const wantsNoPin = (body) => body.noPin === "true" || body.noPin === true;
+const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 function getManualPin(body) {
   const lat = parseFloat(body.lat);
   const lng = parseFloat(body.lng);
@@ -59,7 +63,8 @@ export async function listSuppliers(req, res) {
         .populate("reviewedBy", "name")
         .sort({ code: 1 })
         .skip((Number(page) - 1) * perPage)
-        .limit(perPage),
+        .limit(perPage)
+        .lean(),
       Supplier.countDocuments(filter),
     ]);
 
@@ -133,11 +138,17 @@ export async function createSupplier(req, res) {
       });
     }
 
-    if (!shopName || !phone || !email || !street) {
+    if (!shopName || !phone || !street) {
       return res.status(400).json({
         success: false,
-        message: "Shop name, phone, email and street are required",
+        message: "Shop name, phone and street are required",
       });
+    }
+
+    // Email is optional, but if one is given it has to look like an email.
+    const cleanEmail = String(email ?? "").trim().toLowerCase();
+    if (cleanEmail && !EMAIL_FORMAT.test(cleanEmail)) {
+      return res.status(400).json({ success: false, message: "Enter a valid email address, or leave it blank." });
     }
 
     if (!["admin", "self", "web"].includes(registrationSource)) {
@@ -162,8 +173,9 @@ export async function createSupplier(req, res) {
       });
     }
 
-    const manualPin = getManualPin(req.body);
-    const geo = manualPin ?? (await geocodeAddress({ street, unit }));
+    const noPin = wantsNoPin(req.body);
+    const manualPin = noPin ? null : getManualPin(req.body);
+    const geo = noPin ? {} : (manualPin ?? (await geocodeAddress({ street, unit })));
 
     const last = await Supplier.findOne().sort({ code: -1 }).select("code");
     const nextNumber = last ? Number(last.code.split("-")[1]) + 1 : 1;
@@ -177,13 +189,13 @@ export async function createSupplier(req, res) {
       lastName: lastName.trim(),
       owner: `${firstName.trim()} ${lastName.trim()}`, // 👈 Sync owner
       phone,
-      email,
+      email: cleanEmail || undefined,
       barangay: TARGET_BARANGAY,
       street: street.trim(),
       unit: unit?.trim() || undefined,
       lat: geo.lat,
       lng: geo.lng,
-      pinApproximate: manualPin ? false : Boolean(geo.approximate),
+      pinApproximate: manualPin || noPin ? false : Boolean(geo.approximate),
       operatingHours: JSON.parse(
         operatingHours || '{"days":"Mon-Sat","open":"09:00","close":"18:00"}',
       ),
@@ -202,7 +214,7 @@ export async function createSupplier(req, res) {
 
     // 👇 NEW: send welcome email to shop owner.
     //     Non-blocking — registration succeeds even if SMTP fails.
-    try {
+    if (supplier.email) try {
       const { subject, html, text } = supplierRegisteredEmail({
         firstName: supplier.firstName,
         shopName: supplier.shopName,
@@ -223,7 +235,7 @@ export async function createSupplier(req, res) {
       item: `${supplier.shopName} (${supplier.code})`,
       itemId: supplier._id.toString(),
       remarks: `Registered via ${registrationSource}${hasFile ? " with signed PDF" : ""}${
-        manualPin ? "; pin set manually" : ""
+        manualPin ? "; pin set manually" : noPin ? "; no map pin" : ""
       }; status: ${status}`,
     });
 
@@ -259,6 +271,14 @@ export async function updateSupplier(req, res) {
       return res.status(404).json({ success: false, message: "Supplier not found" });
     }
 
+    if (patch.email !== undefined) {
+      patch.email = String(patch.email ?? "").trim().toLowerCase();
+      if (patch.email && !EMAIL_FORMAT.test(patch.email)) {
+        return res.status(400).json({ success: false, message: "Enter a valid email address, or leave it blank." });
+      }
+      if (!patch.email) patch.email = undefined; // cleared: the email is optional
+    }
+
     if (typeof patch.operatingHours === "string") {
       try {
         patch.operatingHours = JSON.parse(patch.operatingHours);
@@ -274,10 +294,16 @@ export async function updateSupplier(req, res) {
       patch.owner = `${fn} ${ln}`.trim();
     }
 
-    const manualPin = getManualPin(req.body);
+    const noPin = wantsNoPin(req.body);
+    const manualPin = noPin ? null : getManualPin(req.body);
     let pinChangedByAdmin = false;
 
-    if (manualPin) {
+    if (noPin) {
+      patch.lat = undefined;
+      patch.lng = undefined;
+      patch.pinApproximate = false;
+      pinChangedByAdmin = supplier.lat !== undefined || supplier.lng !== undefined;
+    } else if (manualPin) {
       patch.lat = manualPin.lat;
       patch.lng = manualPin.lng;
       patch.pinApproximate = false;

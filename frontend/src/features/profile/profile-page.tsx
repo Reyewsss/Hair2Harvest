@@ -88,10 +88,10 @@ export function ProfilePage() {
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      {/* Four cards in a 2x2 grid; cards in the same row stretch to the same height. */}
+      <div className="grid items-stretch gap-6 lg:grid-cols-2">
         {/* Identity card */}
-        <aside className="flex flex-col gap-6">
-          <section className="overflow-hidden rounded-xl border bg-card">
+          <section className="flex h-full flex-col overflow-hidden rounded-xl border bg-card">
             <div className="h-20 bg-primary/90" />
             <div className="-mt-10 flex flex-col items-center px-5 pb-5 text-center">
               <span className="flex size-20 items-center justify-center rounded-full border-4 border-card bg-secondary text-2xl font-semibold text-foreground">
@@ -116,21 +116,16 @@ export function ProfilePage() {
                 </span>
               </div>
             </div>
-            <dl className="flex flex-col gap-3 border-t px-5 py-4 text-sm">
+            <dl className="mt-auto flex flex-col gap-3 border-t px-5 py-4 text-sm">
               <InfoRow icon={<ShieldCheck />} label="Role" value={ROLE_LABELS[user.role]} />
               <InfoRow icon={<CalendarDays />} label="Member since" value={formatDate(user.createdAt)} />
               <InfoRow icon={<Clock />} label="Last sign-in" value={formatDate(user.lastLoginAt, true)} />
             </dl>
           </section>
 
-          <RecentActivity />
-        </aside>
-
-        {/* Editable sections */}
-        <div className="flex flex-col gap-6 lg:col-span-2">
-          <DetailsForm />
-          <PasswordForm />
-        </div>
+        <DetailsForm />
+        <RecentActivity />
+        <PasswordForm />
       </div>
     </div>
   );
@@ -160,7 +155,7 @@ function Card({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-xl border bg-card p-5 md:p-6">
+    <section className="flex h-full flex-col rounded-xl border bg-card p-5 md:p-6">
       <div className="mb-5 flex items-start gap-3">
         <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary [&_svg]:size-5">
           {icon}
@@ -387,8 +382,8 @@ function RecentActivity() {
   useEffect(load, [load]);
 
   return (
-    <section className="rounded-xl border bg-card p-5">
-      <h3 className="mb-4 text-sm font-semibold">Recent activity</h3>
+    <section className="flex h-full flex-col rounded-xl border bg-card p-5 md:p-6">
+      <h3 className="mb-4 font-semibold">Recent activity</h3>
       {failed ? (
         <p className="text-sm text-muted-foreground">Couldn't load your activity.</p>
       ) : entries === null ? (

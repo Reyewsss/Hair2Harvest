@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import DashboardLayout from "../../dashboard-shell/dashboard-layout";
 import { AccountManagementContent } from "../../accounts/accounts-content";
+import { SecurityContent } from "../../security/security-content";
+import { ReportsContent } from "../../reports/reports-content";
 import { DashboardContent } from "../dashboard-content";
 import {
   DashboardNavigationProvider,
@@ -40,6 +42,8 @@ function DashboardRoute() {
     content = <ProfilePage />;
   } else if (pathname === "/accounts") {
     content = <AccountManagementContent />;
+  } else if (pathname === "/security") {
+    content = <SecurityContent />;
   } else if (pathname === "/inventory") {
     content = <InventoryContent />;
   } else if (pathname.startsWith("/inventory/")) {
@@ -52,12 +56,14 @@ function DashboardRoute() {
     content = <PickupTrackingView />;
   } else if (pathname.startsWith("/suppliers/")) {
     content = <SupplierProfilePage supplierId={pathname.split("/")[2]} />;
+  } else if (pathname === "/reports" || pathname.startsWith("/reports/")) {
+    content = <ReportsContent category={pathname.split("/")[2]} />;
   } else if (pathname === "/machine") {
     content = <MachineContent />;
   } else if (pathname === "/composting") {
     content = <CompostingContent />;
   } else {
-    // Unknown sections, and Reports (not available yet), get the 404 page.
+    // Unknown sections get the 404 page.
     content = (
       <NotFound
         path={pathname}

@@ -1,9 +1,10 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { User } from "./authModel.js";
-import { sendOtpEmail } from "./mailConfig/email.js";
+import { sendFailedAttemptsEmail, sendOtpEmail } from "./mailConfig/email.js";
 import { OTP_ROLES } from "./utils/permissions.js";
 import { EMAIL_RE, validatePassword } from "./utils/passwordPolicy.js";
+import { current } from "../security/securitySettings.js";
 import { canSendOtp, checkOtp, issueOtp } from "./utils/otp.js";
 import {
   clearAuthCookie,
@@ -28,6 +29,9 @@ async function sendCode(user, purpose) {
 // ✅ Successful login — logs the event, then issues the cookie.
 const finishLogin = async (req, res, user, remember) => {
   user.lastLoginAt = new Date();
+  user.failedAttempts = 0;
+  user.lockUntil = undefined;
+  user.failedLogins = [];
   await user.save();
   generateTokenAndSetCookie(res, user, remember);
 
@@ -44,6 +48,52 @@ const finishLogin = async (req, res, user, remember) => {
   return res.json({ user: user.toSafeJSON() });
 };
 
+// Counts a wrong password; at the limit, locks the account and emails the recent attempts.
+async function registerFailure(req, res, user) {
+  const maxAttempts = current().loginMaxAttempts;
+  const lockoutMs = current().loginLockoutSeconds * 1000;
+  const entry = { at: new Date(), ip: req.ip, userAgent: String(req.get("user-agent") ?? "").slice(0, 200) };
+  const updated = await User.findByIdAndUpdate(
+    user._id,
+    { $inc: { failedAttempts: 1 }, $push: { failedLogins: { $each: [entry], $slice: -maxAttempts } } },
+    { new: true },
+  ).select("+failedLogins");
+
+  if (updated.failedAttempts < maxAttempts) {
+    const left = maxAttempts - updated.failedAttempts;
+    return res.status(401).json({
+      message: `Invalid email or password. ${left} attempt${left === 1 ? "" : "s"} left.`,
+    });
+  }
+
+  const attempts = updated.failedLogins.map((a) => a.toObject());
+  const lockUntil = new Date(Date.now() + lockoutMs);
+  await User.updateOne({ _id: user._id }, { $set: { failedAttempts: 0, lockUntil, failedLogins: [] } });
+
+  await recordAudit({
+    req,
+    actor: { name: user.name, _id: user._id },
+    action: "account-locked",
+    module: "auth",
+    item: user.email,
+    remarks: `Locked for ${Math.round(lockoutMs / 1000)}s after ${maxAttempts} failed attempts`,
+  });
+  // A mail failure must never change the login response.
+  sendFailedAttemptsEmail({
+    to: user.email,
+    name: user.name,
+    attempts,
+    lockoutSeconds: Math.round(lockoutMs / 1000),
+  }).catch((error) => console.error("Failed-attempts email error:", error.message));
+
+  const retryAfter = Math.ceil(lockoutMs / 1000);
+  res.set("Retry-After", String(retryAfter));
+  return res.status(429).json({
+    message: `Too many failed attempts. Try again in ${retryAfter} seconds.`,
+    retryAfter,
+  });
+}
+
 /** POST /auth/login */
 export const login = async (req, res) => {
   const email = clean(req.body?.email);
@@ -54,6 +104,25 @@ export const login = async (req, res) => {
   }
 
   const user = await User.findOne({ email }).select("+password +otp");
+
+  // 🔒 Locked out: don't even check the password until the lock expires.
+  if (user?.lockUntil && user.lockUntil > new Date()) {
+    const retryAfter = Math.ceil((user.lockUntil - Date.now()) / 1000);
+    await recordAudit({
+      req,
+      actor: { name: user.name, _id: user._id },
+      action: "login-failed",
+      module: "auth",
+      item: user.email,
+      remarks: "Attempt while locked out",
+    });
+    res.set("Retry-After", String(retryAfter));
+    return res.status(429).json({
+      message: `Too many failed attempts. Try again in ${retryAfter} second${retryAfter === 1 ? "" : "s"}.`,
+      retryAfter,
+    });
+  }
+
   const passwordOk = await bcrypt.compare(password, user?.password ?? DUMMY_HASH);
 
   // ❌ Failed login — audit it (this is what makes "who tried to log in" visible)
@@ -66,6 +135,7 @@ export const login = async (req, res) => {
       item: email,
       remarks: user ? "Wrong password" : "Unknown email",
     });
+    if (user) return registerFailure(req, res, user);
     return res.status(401).json({ message: "Invalid email or password." });
   }
 
@@ -84,7 +154,7 @@ export const login = async (req, res) => {
   }
 
   // Admins and staff need OTP — audit that the code was sent
-  if (OTP_ROLES.includes(user.role)) {
+  if (OTP_ROLES.includes(user.role) || (user.role === "staff" && current().staffRequiresOtp)) {
     await sendCode(user, "login");
     await recordAudit({
       req,

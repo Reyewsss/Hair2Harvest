@@ -30,6 +30,7 @@ import { Drawer } from "../components/drawer";
 import { SupplierForm } from "../components/supplier-form";
 import { SupplierPinMap } from "../components/supplier-map";
 import { SupplierLink } from "../components/supplier-link";
+import { ActionButton } from "../components/action-button";
 import {
   FilterDropdown,
   SegmentedTabs,
@@ -42,7 +43,7 @@ import {
   formatBytes,
   validateFile,
 } from "@/lib/upload-validation";
-import { LeafLoader } from "@/shared/ui/leaf-loader";
+import { PageSkeleton } from "@/shared/ui/page-skeleton";
 import { formatDate } from "@/features/inventory/data/inventory-data";
 import { approveShop, missingInfo, rejectShop } from "../components/review-panel";
 
@@ -65,6 +66,16 @@ export function SuppliersContent() {
   const [view, setView] = useState<View>("list");
   const [registering, setRegistering] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // shop id -> the action running on it ("approve" | "reject" | "delete"); drives the per-row spinner
+  const [pending, setPending] = useState<Record<string, string>>({});
+  const track = async <T,>(id: string, action: string, fn: () => Promise<T>): Promise<T> => {
+    setPending((m) => ({ ...m, [id]: action }));
+    try {
+      return await fn();
+    } finally {
+      setPending(({ [id]: _done, ...rest }) => rest);
+    }
+  };
 
   const rows = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -86,7 +97,7 @@ export function SuppliersContent() {
   const rejected = rows.filter((s) => s.status !== "enrolled" && s.review === "rejected");
   const filtered = search.trim() !== "" || frequency !== "all";
   const review = (s: Supplier) => (status: "approved" | "rejected", remarks?: string) =>
-    reviewSupplier(s.id, status, remarks);
+    track(s.id, status === "approved" ? "approve" : "reject", () => reviewSupplier(s.id, status, remarks));
 
   const handleRegister = async (formData: FormData) => {
     const shopName = String(formData.get("shopName") ?? "").trim();
@@ -179,7 +190,7 @@ export function SuppliersContent() {
         "This will permanently remove the supplier and their consent document.",
       confirmLabel: "Delete",
       variant: "destructive",
-      onConfirm: async () => {
+      onConfirm: () => track(id, "delete", async () => {
         try {
           await deleteSupplier(id);
           showResult({
@@ -194,14 +205,12 @@ export function SuppliersContent() {
             message: error?.message || "Please try again.",
           });
         }
-      },
+      }),
     });
   };
 
   if (loading)
-    return (
-      <LeafLoader label="Loading contributors" page />
-    );
+    return <PageSkeleton variant="table" />;
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 pt-8 pb-10 md:px-6">
@@ -333,7 +342,7 @@ export function SuppliersContent() {
                       <StatusBadge status={s.status} review={s.review} />
                     </TableCell>
                     <TableCell>
-                      {s.consentDocument ? (
+                      {s.consentDocument && canEdit ? (
                         <a
                           href={`${API_BASE}/suppliers/${encodeURIComponent(s.id)}/consent`}
                           target="_blank"
@@ -350,13 +359,14 @@ export function SuppliersContent() {
                     </TableCell>
                     <TableCell>
                       {canEdit && (
-                        <button
-                          type="button"
+                        <ActionButton
+                          icon={Trash2}
+                          label="Remove"
+                          tone="danger"
+                          loading={pending[s.id] === "delete"}
+                          disabled={Boolean(pending[s.id])}
                           onClick={() => handleDelete(s.id, s.shopName)}
-                          className="inline-flex items-center gap-1.5 text-sm text-destructive hover:underline"
-                        >
-                          <Trash2 className="size-4" /> Remove
-                        </button>
+                        />
                       )}
                     </TableCell>
                   </TableRow>
@@ -376,6 +386,7 @@ export function SuppliersContent() {
             kind="candidate"
             canApprove={canApprove}
             canEdit={canEdit}
+            pending={pending}
             onApprove={(s) => approveShop(s, review(s))}
             onReject={(s) => rejectShop(s, review(s))}
             onDelete={(s) => handleDelete(s.id, s.shopName)}
@@ -393,6 +404,7 @@ export function SuppliersContent() {
             kind="rejected"
             canApprove={canApprove}
             canEdit={canEdit}
+            pending={pending}
             onApprove={(s) => approveShop(s, review(s))}
             onReject={(s) => rejectShop(s, review(s))}
             onDelete={(s) => handleDelete(s.id, s.shopName)}
@@ -457,6 +469,7 @@ function ReviewTable({
   kind,
   canApprove,
   canEdit,
+  pending,
   onApprove,
   onReject,
   onDelete,
@@ -466,6 +479,7 @@ function ReviewTable({
   kind: "candidate" | "rejected";
   canApprove: boolean;
   canEdit: boolean;
+  pending: Record<string, string>;
   onApprove: (s: Supplier) => void;
   onReject: (s: Supplier) => void;
   onDelete: (s: Supplier) => void;
@@ -540,39 +554,45 @@ function ReviewTable({
                   )}
                 </TableCell>
                 <TableCell>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <div className="flex flex-wrap items-center gap-1">
                     {canApprove && reviewable ? (
                       <>
-                        <button
-                          type="button"
+                        <ActionButton
+                          icon={Check}
+                          label="Approve"
+                          tone="success"
+                          loading={pending[s.id] === "approve"}
+                          disabled={Boolean(pending[s.id])}
                           onClick={() => onApprove(s)}
-                          className="inline-flex items-center gap-1 text-sm text-success hover:underline"
-                        >
-                          <Check className="size-4" /> Approve
-                        </button>
+                        />
                         {kind === "candidate" ? (
-                          <button
-                            type="button"
+                          <ActionButton
+                            icon={X}
+                            label="Reject"
+                            tone="muted"
+                            loading={pending[s.id] === "reject"}
+                            disabled={Boolean(pending[s.id])}
                             onClick={() => onReject(s)}
-                            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground hover:underline"
-                          >
-                            <X className="size-4" /> Reject
-                          </button>
+                          />
                         ) : null}
                       </>
                     ) : (
-                      <SupplierLink href={`/suppliers/${s.id}`} className="text-sm text-primary hover:underline">
+                      <SupplierLink
+                        href={`/suppliers/${s.id}`}
+                        className="inline-flex h-8 items-center rounded-md px-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
+                      >
                         Open
                       </SupplierLink>
                     )}
                     {canEdit ? (
-                      <button
-                        type="button"
+                      <ActionButton
+                        icon={Trash2}
+                        label="Remove"
+                        tone="danger"
+                        loading={pending[s.id] === "delete"}
+                        disabled={Boolean(pending[s.id])}
                         onClick={() => onDelete(s)}
-                        className="inline-flex items-center gap-1 text-sm text-destructive hover:underline"
-                      >
-                        <Trash2 className="size-4" /> Remove
-                      </button>
+                      />
                     ) : null}
                   </div>
                 </TableCell>

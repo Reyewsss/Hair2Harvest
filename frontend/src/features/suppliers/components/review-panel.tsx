@@ -48,7 +48,6 @@ export function missingInfo(supplier: Supplier) {
   return [
     !supplier.phone && "phone",
     !supplier.street && "street",
-    !Number.isFinite(supplier.lat) && "map pin",
     !supplier.consentParticipate && "consent",
   ].filter(Boolean) as string[];
 }

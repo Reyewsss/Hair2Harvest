@@ -36,7 +36,8 @@ const supplierSchema = new mongoose.Schema(
     owner: { type: String, required: true, trim: true },
     
     phone: { type: String, required: true, trim: true },
-    email: { type: String, required: true, lowercase: true, trim: true },
+    // Optional: a shop can be registered with a phone number only.
+    email: { type: String, lowercase: true, trim: true },
 
     // ─── Location ─────────────────────────────────────────────────────
     barangay: { type: String, required: true, trim: true, index: true },

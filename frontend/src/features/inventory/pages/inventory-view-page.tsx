@@ -4,7 +4,7 @@ import { InventoryLink } from "../components/inventory-link";
 import { useInventory } from "../store/inventory-store";
 import { InventoryContent } from "./inventory-content";
 import { StockView } from "../views/stock-view";
-import { LeafLoader } from "@/shared/ui/leaf-loader";
+import { PageSkeleton } from "@/shared/ui/page-skeleton";
 
 export function InventoryViewPage({ tab }: { tab: string | undefined }) {
   const { logs, loading } = useInventory();
@@ -29,7 +29,7 @@ export function InventoryViewPage({ tab }: { tab: string | undefined }) {
       </div>
 
       {loading ? (
-        <LeafLoader label="Loading logs" page />
+        <PageSkeleton variant="cards" className="p-0" />
       ) : (
         tab === "stock" && <StockView logs={logs} pickups={[]} />
       )}

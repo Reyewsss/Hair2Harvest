@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { Eye, EyeOff } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/shared/ui/button";
 import { errorMessage } from "@/lib/api";
+import { useAuth } from "@/features/auth/context/auth-context";
 import { ROLE_LABELS, type Role } from "@/features/auth/permissions";
 import { accountsApi, type Account } from "../accounts-api";
 
@@ -23,6 +25,10 @@ export function AccountForm({
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [notifyEmail, setNotifyEmail] = useState("");
+  const [idFile, setIdFile] = useState<File | null>(null);
+  const { user: me } = useAuth();
   const [role, setRole] = useState<Role>("staff");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -46,15 +52,24 @@ export function AccountForm({
     setError("");
     setBusy(true);
     try {
-      onCreated(
-        await accountsApi.create({
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          email: email.trim(),
-          role,
-          password,
-        }),
-      );
+      let account = await accountsApi.create({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: email.trim(),
+        phone: phone.trim() || undefined,
+        notifyEmail: notifyEmail.trim() || undefined,
+        role,
+        password,
+      });
+      // The ID is optional. If it fails the account still exists, so say so and carry on.
+      if (idFile) {
+        try {
+          account = await accountsApi.uploadId(account.id, idFile);
+        } catch (err) {
+          toast.error(`Account created, but the ID upload failed: ${errorMessage(err)}`);
+        }
+      }
+      onCreated(account);
     } catch (err) {
       setError(errorMessage(err));
       setBusy(false);
@@ -94,6 +109,43 @@ export function AccountForm({
         </div>
 
         <label className="flex flex-col gap-1.5 text-sm font-medium">
+          Mobile number (optional)
+          <input
+            type="tel"
+            inputMode="tel"
+            className={fieldClass}
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="09XX XXX XXXX"
+          />
+          <span className="text-xs font-normal text-muted-foreground">
+            Used to text this person their pickup assignments.
+          </span>
+        </label>
+
+        <label className="flex flex-col gap-1.5 text-sm font-medium">
+          Reminder email (optional)
+          <input
+            type="email"
+            className={fieldClass}
+            value={notifyEmail}
+            onChange={(e) => setNotifyEmail(e.target.value)}
+            placeholder="Where collection reminders go, if not the login email"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1.5 text-sm font-medium">
+          ID document (optional)
+          <input
+            type="file"
+            accept="application/pdf,image/jpeg,image/png"
+            className="text-sm file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-2 file:text-sm file:font-medium"
+            onChange={(e) => setIdFile(e.target.files?.[0] ?? null)}
+          />
+          <span className="text-xs font-normal text-muted-foreground">PDF, JPG or PNG, up to 5 MB. Only account managers can view it.</span>
+        </label>
+
+        <label className="flex flex-col gap-1.5 text-sm font-medium">
           Email
           <input
             type="email"
@@ -110,7 +162,9 @@ export function AccountForm({
             value={role}
             onChange={(e) => setRole(e.target.value as Role)}
           >
-            {(Object.keys(ROLE_LABELS) as Role[]).map((r) => (
+            {(Object.keys(ROLE_LABELS) as Role[])
+              .filter((r) => r !== "superadmin" || me?.role === "superadmin")
+              .map((r) => (
               <option key={r} value={r}>
                 {ROLE_LABELS[r]}
               </option>

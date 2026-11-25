@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { ChevronLeft, ChevronRight, IdCard, Loader2, Plus, Search, Trash2, UserCheck, UserX } from "lucide-react";
 import { Button } from "@/shared/ui/button";
+import { ActionButton } from "@/shared/ui/action-button";
 import {
   InputGroup,
   InputGroupAddon,
@@ -16,7 +17,7 @@ import {
 } from "@/shared/ui/table";
 import { cn } from "@/lib/utils";
 import { errorMessage } from "@/lib/api";
-import { confirm } from "@/shared/ui/modal";
+import { closeModal, confirm, openModal } from "@/shared/ui/modal";
 import { isDuplicateError, showResult } from "@/shared/ui/result-modal";
 import { notifyAccountsChanged } from "@/features/dashboard-shell/components/sidebar";
 import { useAuth } from "@/features/auth/context/auth-context";
@@ -24,14 +25,118 @@ import { ROLE_LABELS, type Role } from "@/features/auth/permissions";
 import { Drawer } from "@/features/suppliers/components/drawer"; // shared side drawer
 import { accountsApi, type Account } from "./accounts-api";
 import { AccountForm } from "./components/account-form";
-import { LeafLoader } from "@/shared/ui/leaf-loader";
+import { TableRowsSkeleton } from "@/shared/ui/page-skeleton";
 
 type RoleFilter = "all" | Role;
 type Status = "active" | "pending" | "deactivated";
 
 const PAGE_SIZE = 8;
+
+/** Dialog for the optional contact details and ID: mobile (pickup SMS), reminder email, ID file. */
+function DetailsEditor({ account, onSaved }: { account: Account; onSaved: (a: Account) => void }) {
+  const [current, setCurrent] = useState(account);
+  const [phone, setPhone] = useState(account.phone ?? "");
+  const [notifyEmail, setNotifyEmail] = useState(account.notifyEmail ?? "");
+  const [file, setFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [error, setError] = useState("");
+  const busy = saving || removing;
+
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      let next = current;
+      if (phone.trim() !== (current.phone ?? "") || notifyEmail.trim() !== (current.notifyEmail ?? "")) {
+        next = await accountsApi.update(current.id, { phone: phone.trim(), notifyEmail: notifyEmail.trim() });
+      }
+      if (file) next = await accountsApi.uploadId(current.id, file);
+      onSaved(next);
+      closeModal();
+    } catch (err) {
+      setError(errorMessage(err));
+      setSaving(false);
+    }
+  };
+
+  const removeId = async () => {
+    setRemoving(true);
+    setError("");
+    try {
+      const next = await accountsApi.removeId(current.id);
+      setCurrent(next);
+      onSaved(next);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setRemoving(false);
+    }
+  };
+
+  const input =
+    "h-10 w-full rounded-lg border-none bg-secondary px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/30";
+
+  return (
+    <form className="space-y-4" onSubmit={save}>
+      <p className="text-sm text-muted-foreground">
+        Optional details for {current.name}. Leave a field blank to clear it.
+      </p>
+      <label className="flex flex-col gap-1.5 text-sm font-medium">
+        Mobile number
+        <input type="tel" inputMode="tel" placeholder="09XX XXX XXXX" className={input} value={phone} onChange={(e) => setPhone(e.target.value)} />
+        <span className="text-xs font-normal text-muted-foreground">Pickup assignments are texted here.</span>
+      </label>
+      <label className="flex flex-col gap-1.5 text-sm font-medium">
+        Reminder email
+        <input
+          type="email"
+          placeholder={current.email}
+          className={input}
+          value={notifyEmail}
+          onChange={(e) => setNotifyEmail(e.target.value)}
+        />
+        <span className="text-xs font-normal text-muted-foreground">Collection reminders go here. Blank uses the login email.</span>
+      </label>
+      <div className="flex flex-col gap-1.5 text-sm font-medium">
+        ID document
+        {current.hasIdDocument ? (
+          <div className="flex items-center gap-2 text-sm font-normal">
+            <a href={accountsApi.idUrl(current.id)} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+              View current ID
+            </a>
+            <ActionButton icon={Trash2} label="Remove" tone="danger" loading={removing} disabled={busy} onClick={removeId} />
+          </div>
+        ) : (
+          <span className="text-xs font-normal text-muted-foreground">No ID on file.</span>
+        )}
+        <input
+          type="file"
+          accept="application/pdf,image/jpeg,image/png"
+          className="text-sm file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-2 file:text-sm file:font-medium"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        />
+        <span className="text-xs font-normal text-muted-foreground">
+          {current.hasIdDocument ? "Choose a file to replace it. " : ""}PDF, JPG or PNG, up to 5 MB.
+        </span>
+      </div>
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" disabled={busy} onClick={() => closeModal()}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={busy} className="gap-2">
+          {saving ? <Loader2 className="size-4 animate-spin" /> : null}
+          {saving ? "Saving..." : "Save"}
+        </Button>
+      </div>
+    </form>
+  );
+}
 const filters: { value: RoleFilter; label: string }[] = [
   { value: "all", label: "All" },
+  { value: "superadmin", label: "Super Admin" },
   { value: "admin", label: "Admin" },
   { value: "operator", label: "Operator" },
   { value: "staff", label: "Staff" },
@@ -45,6 +150,7 @@ const statusTone: Record<Status, string> = {
   deactivated: "bg-destructive/10 text-destructive",
 };
 const roleTone: Record<Role, string> = {
+  superadmin: "bg-primary text-primary-foreground",
   admin: "bg-primary text-primary-foreground",
   operator: "bg-primary/10 text-primary",
   staff: "bg-secondary text-secondary-foreground",
@@ -100,6 +206,17 @@ export function AccountManagementContent() {
     message: string;
   };
 
+  // account id -> the action running on it; drives the per-row spinner
+  const [pending, setPending] = useState<Record<string, string>>({});
+  const track = async (id: string, name: string, fn: () => Promise<void>) => {
+    setPending((m) => ({ ...m, [id]: name }));
+    try {
+      await fn();
+    } finally {
+      setPending(({ [id]: _done, ...rest }) => rest);
+    }
+  };
+
   const run = async (action: () => Promise<void>, outcome: Outcome) => {
     try {
       await action();
@@ -116,14 +233,21 @@ export function AccountManagementContent() {
   };
 
   const changeRole = (a: Account, role: Role) =>
-    run(async () => replace(await accountsApi.update(a.id, { role })), {
+    track(a.id, "role", () => run(async () => replace(await accountsApi.update(a.id, { role })), {
       type: "updated",
       title: "Role updated",
       message: `${a.name} is now ${ROLE_LABELS[role]}. They were signed out.`,
+    }));
+
+  const editDetails = (a: Account) =>
+    openModal({
+      title: "Contact details and ID",
+      size: "sm",
+      content: <DetailsEditor account={a} onSaved={replace} />,
     });
 
   const toggleActive = (a: Account) =>
-    run(
+    track(a.id, "toggle", () => run(
       async () =>
         replace(await accountsApi.update(a.id, { isActive: !a.isActive })),
       {
@@ -133,7 +257,7 @@ export function AccountManagementContent() {
           ? `${a.name} can no longer sign in.`
           : `${a.name} can sign in again.`,
       },
-    );
+    ));
 
   const remove = (a: Account) => {
     confirm({
@@ -143,7 +267,7 @@ export function AccountManagementContent() {
       cancelLabel: "Cancel",
       variant: "destructive",
       onConfirm: () =>
-        run(
+        track(a.id, "delete", () => run(
           async () => {
             await accountsApi.remove(a.id);
             setAccounts((list) => list.filter((x) => x.id !== a.id));
@@ -154,13 +278,14 @@ export function AccountManagementContent() {
             title: "Account deleted",
             message: `${a.name} (${a.email}) was permanently removed.`,
           },
-        ),
+        )),
     });
   };
 
   const counts = useMemo(
     () => ({
       all: accounts.length,
+      superadmin: accounts.filter((a) => a.role === "superadmin").length,
       admin: accounts.filter((a) => a.role === "admin").length,
       operator: accounts.filter((a) => a.role === "operator").length,
       staff: accounts.filter((a) => a.role === "staff").length,
@@ -265,14 +390,7 @@ export function AccountManagementContent() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow>
-                <TableCell
-                  colSpan={6}
-                  className="py-10! text-center text-muted-foreground"
-                >
-                  <LeafLoader label="Loading accounts" />
-                </TableCell>
-              </TableRow>
+              <TableRowsSkeleton colSpan={6} rows={6} />
             ) : pageRows.length === 0 ? (
               <TableRow>
                 <TableCell
@@ -305,6 +423,9 @@ export function AccountManagementContent() {
                           <p className="truncate text-xs text-muted-foreground">
                             {a.email}
                           </p>
+                          {a.phone ? (
+                            <p className="truncate text-xs text-muted-foreground">{a.phone}</p>
+                          ) : null}
                         </div>
                       </div>
                     </TableCell>
@@ -325,9 +446,12 @@ export function AccountManagementContent() {
                           onChange={(e) =>
                             void changeRole(a, e.target.value as Role)
                           }
-                          className="h-8 rounded-md bg-secondary px-2 text-sm outline-none"
+                          disabled={Boolean(pending[a.id])}
+                          className="h-8 rounded-md bg-secondary px-2 text-sm outline-none disabled:opacity-50"
                         >
-                          {(Object.keys(ROLE_LABELS) as Role[]).map((r) => (
+                          {(Object.keys(ROLE_LABELS) as Role[])
+                            .filter((r) => r !== "superadmin" || me?.role === "superadmin")
+                            .map((r) => (
                             <option key={r} value={r}>
                               {ROLE_LABELS[r]}
                             </option>
@@ -355,23 +479,30 @@ export function AccountManagementContent() {
                       {isMe ? (
                         <span className="text-xs text-muted-foreground">-</span>
                       ) : (
-                        <div className="flex gap-1">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            className="h-8 px-2"
-                            onClick={() => void toggleActive(a)}
-                          >
-                            {a.isActive ? "Deactivate" : "Activate"}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            className="h-8 px-2 text-destructive"
+                        <div className="flex flex-wrap gap-1">
+                          <ActionButton
+                            icon={IdCard}
+                            label="Details"
+                            tone="default"
+                            disabled={Boolean(pending[a.id])}
+                            onClick={() => editDetails(a)}
+                          />
+                          <ActionButton
+                            icon={a.isActive ? UserX : UserCheck}
+                            label={a.isActive ? "Deactivate" : "Activate"}
+                            tone={a.isActive ? "muted" : "success"}
+                            loading={pending[a.id] === "toggle"}
+                            disabled={Boolean(pending[a.id])}
+                            onClick={() => toggleActive(a)}
+                          />
+                          <ActionButton
+                            icon={Trash2}
+                            label="Delete"
+                            tone="danger"
+                            loading={pending[a.id] === "delete"}
+                            disabled={Boolean(pending[a.id])}
                             onClick={() => remove(a)}
-                          >
-                            Delete
-                          </Button>
+                          />
                         </div>
                       )}
                     </TableCell>

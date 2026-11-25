@@ -1,4 +1,5 @@
 // Creates the first administrator from ADMIN_NAME / ADMIN_EMAIL / ADMIN_PASSWORD. Run: npm run seed:admin
+// Set ADMIN_ROLE=superadmin to create the first Super Admin instead (default: admin).
 import "dotenv/config";
 import mongoose from "mongoose";
 import { connectDB } from "../config/db.js";
@@ -6,6 +7,7 @@ import { User } from "../modules/auth/authModel.js";
 import { EMAIL_RE, validatePassword } from "../modules/auth/utils/passwordPolicy.js";
 
 const { ADMIN_NAME, ADMIN_EMAIL, ADMIN_PASSWORD } = process.env;
+const ROLE = process.env.ADMIN_ROLE === "superadmin" ? "superadmin" : "admin";
 
 try {
   if (!ADMIN_NAME || !EMAIL_RE.test(String(ADMIN_EMAIL))) throw new Error("Set ADMIN_NAME and a valid ADMIN_EMAIL in .env");
@@ -13,11 +15,11 @@ try {
   if (problem) throw new Error(`ADMIN_PASSWORD: ${problem}`);
 
   await connectDB();
-  if (await User.exists({ role: "admin" })) {
-    console.log("An administrator already exists. Nothing to do.");
+  if (await User.exists({ role: ROLE })) {
+    console.log(`A ${ROLE} already exists. Nothing to do.`);
   } else {
-    await User.create({ name: ADMIN_NAME, email: ADMIN_EMAIL, password: ADMIN_PASSWORD, role: "admin" });
-    console.log(`Administrator created: ${ADMIN_EMAIL}`);
+    await User.create({ name: ADMIN_NAME, email: ADMIN_EMAIL, password: ADMIN_PASSWORD, role: ROLE });
+    console.log(`${ROLE} created: ${ADMIN_EMAIL}`);
   }
 } catch (error) {
   console.error(error.message);

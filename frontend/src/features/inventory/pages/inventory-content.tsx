@@ -30,7 +30,7 @@ import { VolumeChart } from "../components/volume-chart";
 import { useCan } from "@/features/auth/access";
 import { useInventory } from "../store/inventory-store";
 import { useSuppliers } from "@/features/suppliers/store/suppliers-store";
-import { LeafLoader } from "@/shared/ui/leaf-loader";
+import { ListSkeleton, PageSkeleton } from "@/shared/ui/page-skeleton";
 import { pickupsApi } from "@/features/suppliers/suppliers-api";
 import { SupplierLink } from "@/features/suppliers/components/supplier-link";
 
@@ -86,9 +86,7 @@ export function InventoryContent() {
   };
 
   if (loading) {
-    return (
-      <LeafLoader label="Loading inventory" page />
-    );
+    return <PageSkeleton variant="cards" />;
   }
 
   const stock = stockSummary(logs, []);
@@ -131,14 +129,18 @@ export function InventoryContent() {
             label="Raw hair on hand"
             value={fmtSacks(stock.onHand)}
             note="Received minus processed"
+            hint={"Raw-hair sacks currently stored at the site.\nAll sacks received, minus the sacks taken out for composting batches."}
           />
           <SummaryCard
             label="Awaiting delivery"
             value={fmtSacks(awaiting)}
             note="Collected, not yet at the site"
+            hint={"Sacks staff have already collected from shops but that haven't been delivered to the site yet.\nThey join the stock once delivery is verified."}
           />
           <SummaryCard
             label="Pickups today"
+            hint={`Pickups scheduled for today.
+${dueToday.length} total, ${toCollect} still to collect.`}
             value={String(dueToday.length)}
             note={
               dueToday.length === 0
@@ -152,6 +154,8 @@ export function InventoryContent() {
             label="Collected, last 30 days"
             value={fmtSacks(Math.round(stock.received30 * 10) / 10)}
             note={`${fmtSacks(Math.round(stock.rejected30 * 10) / 10)} rejected (${rejectionRate.toFixed(1)}%)`}
+            hint={`Sacks received in the last 30 days.
+${fmtSacks(Math.round(stock.rejected30 * 10) / 10)} were rejected, a ${rejectionRate.toFixed(1)}% rejection rate.`}
           />
         </div>
       </section>
@@ -204,8 +208,8 @@ function UpcomingPickups({
         </SupplierLink>
       </div>
       {loading ? (
-        <div className="px-4 py-10">
-          <LeafLoader label="Loading pickups" />
+        <div className="px-4 py-6">
+          <ListSkeleton rows={4} />
         </div>
       ) : upcoming.length === 0 ? (
         <p className="px-4 py-10 text-center text-sm text-muted-foreground">

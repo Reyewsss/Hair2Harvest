@@ -1,8 +1,9 @@
 import mongoose from "mongoose";
 import { User } from "../auth/authModel.js";
-import { ROLES } from "../auth/utils/permissions.js";
+import { ADMIN_ROLES, ROLES } from "../auth/utils/permissions.js";
 import { EMAIL_RE, validatePassword } from "../auth/utils/passwordPolicy.js";
 import { recordAudit } from "../audit/auditController.js";
+import { toE164 } from "../suppliers/utils/sms.js";
 
 const clean = (value) => String(value ?? "").trim();
 const fullName = (first, last) => [first, last].filter(Boolean).join(" ").trim();
@@ -19,8 +20,20 @@ function splitName(body) {
   return { firstName: first ?? "", lastName: rest.join(" ") };
 }
 
-const anotherAdminExists = async (excludeId) =>
-  (await User.countDocuments({ role: "admin", isActive: true, _id: { $ne: excludeId } })) > 0;
+// Keeps the system from losing its last administrator. A Super Admin can only be
+// replaced by another Super Admin; an Admin by any other administrator-level account.
+const anotherAdminExists = async (user) =>
+  (await User.countDocuments({
+    role: user.role === "superadmin" ? "superadmin" : { $in: ADMIN_ROLES },
+    isActive: true,
+    _id: { $ne: user._id },
+  })) > 0;
+
+const isAdminLevel = (role) => ADMIN_ROLES.includes(role);
+
+// Only a Super Admin may create, promote, modify or remove Super Admin accounts.
+const SUPER_ONLY = "Only a Super Admin can manage Super Admin accounts.";
+const deniesSuper = (req, ...roles) => roles.includes("superadmin") && req.user.role !== "superadmin";
 
 const findTarget = async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) {
@@ -41,11 +54,19 @@ export const createAccount = async (req, res) => {
   const { firstName, lastName } = splitName(req.body);
   const email = clean(req.body?.email).toLowerCase();
   const { role, password } = req.body ?? {};
+  const notifyEmail = clean(req.body?.notifyEmail).toLowerCase();
+  if (notifyEmail && !EMAIL_RE.test(notifyEmail)) {
+    return res.status(400).json({ message: "Enter a valid reminder email, or leave it blank." });
+  }
+  const rawPhone = clean(req.body?.phone);
+  const phone = rawPhone ? toE164(rawPhone) : "";
+  if (rawPhone && !phone) return res.status(400).json({ message: "Enter a valid PH mobile number, or leave it blank." });
 
   if (!firstName) return res.status(400).json({ message: "Enter a first name." });
   if (!lastName) return res.status(400).json({ message: "Enter a last name." });
   if (!EMAIL_RE.test(email)) return res.status(400).json({ message: "Enter a valid email address." });
   if (!ROLES.includes(role)) return res.status(400).json({ message: "Choose a role." });
+  if (deniesSuper(req, role)) return res.status(403).json({ message: SUPER_ONLY });
   const problem = validatePassword(password);
   if (problem) return res.status(400).json({ message: problem });
   if (await User.exists({ email })) {
@@ -57,6 +78,8 @@ export const createAccount = async (req, res) => {
     lastName,
     name: fullName(firstName, lastName),
     email,
+    phone: phone || undefined,
+    notifyEmail: notifyEmail || undefined,
     role,
     password,
     createdBy: req.user.id,
@@ -80,6 +103,7 @@ export const updateAccount = async (req, res) => {
 
   const { role, isActive, password } = req.body ?? {};
   const isSelf = user.id === req.user.id;
+  if (deniesSuper(req, user.role, role)) return res.status(403).json({ message: SUPER_ONLY });
   let invalidateSessions = false;
   const changes = [];
 
@@ -104,10 +128,31 @@ export const updateAccount = async (req, res) => {
     user.name = next;
   }
 
+  if (req.body?.notifyEmail !== undefined) {
+    const next = clean(req.body.notifyEmail).toLowerCase();
+    if (next && !EMAIL_RE.test(next)) {
+      return res.status(400).json({ message: "Enter a valid reminder email, or leave it blank." });
+    }
+    if (next !== (user.notifyEmail || "")) {
+      changes.push("reminder email updated");
+      user.notifyEmail = next || undefined;
+    }
+  }
+
+  if (req.body?.phone !== undefined) {
+    const rawPhone = clean(req.body.phone);
+    const phone = rawPhone ? toE164(rawPhone) : "";
+    if (rawPhone && !phone) return res.status(400).json({ message: "Enter a valid PH mobile number, or leave it blank." });
+    if ((phone || "") !== (user.phone || "")) {
+      changes.push("phone updated");
+      user.phone = phone || undefined;
+    }
+  }
+
   if (role !== undefined && role !== user.role) {
     if (!ROLES.includes(role)) return res.status(400).json({ message: "Choose a valid role." });
     if (isSelf) return res.status(400).json({ message: "You can't change your own role." });
-    if (user.role === "admin" && !(await anotherAdminExists(user.id))) {
+    if (isAdminLevel(user.role) && !(await anotherAdminExists(user))) {
       return res.status(400).json({ message: "There must be at least one active administrator." });
     }
     changes.push(`role: ${user.role} → ${role}`);
@@ -118,7 +163,7 @@ export const updateAccount = async (req, res) => {
   if (isActive !== undefined && Boolean(isActive) !== user.isActive) {
     if (!Boolean(isActive)) {
       if (isSelf) return res.status(400).json({ message: "You can't deactivate your own account." });
-      if (user.role === "admin" && !(await anotherAdminExists(user.id))) {
+      if (isAdminLevel(user.role) && !(await anotherAdminExists(user))) {
         return res.status(400).json({ message: "There must be at least one active administrator." });
       }
     }
@@ -158,7 +203,8 @@ export const deleteAccount = async (req, res) => {
   if (user.id === req.user.id) {
     return res.status(400).json({ message: "You can't delete your own account." });
   }
-  if (user.role === "admin" && !(await anotherAdminExists(user.id))) {
+  if (deniesSuper(req, user.role)) return res.status(403).json({ message: SUPER_ONLY });
+  if (isAdminLevel(user.role) && !(await anotherAdminExists(user))) {
     return res.status(400).json({ message: "There must be at least one active administrator." });
   }
 
@@ -191,6 +237,7 @@ export const listStaff = async (_req, res) => {
         firstName: u.firstName,
         lastName: u.lastName,
         role: u.role,
+        hasPhone: Boolean(u.phone),
       })),
     });
   } catch (error) {

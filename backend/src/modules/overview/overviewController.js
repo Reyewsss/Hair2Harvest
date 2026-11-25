@@ -9,31 +9,19 @@ export async function getDashboardData(req, res) {
     // Pickup dates are stored as Philippine calendar dates (YYYY-MM-DD).
     const today = now.toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
 
-    // 1. Fetch Suppliers Data
-    const totalSuppliers = await Supplier.countDocuments();
-    const approvedSuppliers = await Supplier.countDocuments({ status: "approved" });
-    const pendingSuppliers = await Supplier.countDocuments({ status: "pending" });
-
-    // 2. Fetch Pickups Data
-    // Active = scheduled + collected (not yet delivered)
-    const activePickups = await Pickup.countDocuments({
-      status: { $in: ["scheduled", "collected"] },
-    });
-    // Due today
-    const dueToday = await Pickup.countDocuments({
-      status: { $in: ["scheduled", "collected"] },
-      scheduledDate: today,
-    });
-    // Overdue
-    const overdue = await Pickup.countDocuments({
-      status: { $in: ["scheduled", "collected"] },
-      scheduledDate: { $lt: today },
-    });
-    // Delivered (all time)
-    const deliveredPickups = await Pickup.countDocuments({ status: "delivered" });
-
-    // 3. Fetch User Data (Staff/Operators)
-    const totalStaff = await User.countDocuments({ role: "staff", isActive: true });
+    // All the counts run at the same time (they used to run one after another).
+    const live = { $in: ["scheduled", "collected"] }; // active = scheduled + collected, not yet delivered
+    const [totalSuppliers, approvedSuppliers, pendingSuppliers, activePickups, dueToday, overdue, deliveredPickups, totalStaff] =
+      await Promise.all([
+        Supplier.countDocuments(),
+        Supplier.countDocuments({ status: "approved" }),
+        Supplier.countDocuments({ status: "pending" }),
+        Pickup.countDocuments({ status: live }),
+        Pickup.countDocuments({ status: live, scheduledDate: today }),
+        Pickup.countDocuments({ status: live, scheduledDate: { $lt: today } }),
+        Pickup.countDocuments({ status: "delivered" }),
+        User.countDocuments({ role: "staff", isActive: true }),
+      ]);
 
     // 4. 7-day trend: raw-hair sacks received into inventory per day (Manila dates,
     //    the same YYYY-MM-DD strings the inventory logs use).

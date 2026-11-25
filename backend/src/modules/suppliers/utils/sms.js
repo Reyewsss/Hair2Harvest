@@ -2,7 +2,10 @@
 // TextBee SMS gateway — sends through your own Android phone.
 // Docs: https://textbee.dev/docs/api-reference (POST /gateway/send-sms)
 
-const TEXTBEE_URL = "https://api.textbee.dev/api/v1/gateway/send-sms";
+// POST /gateway/send-sms: current endpoint per https://textbee.dev/docs/api-reference.
+// TEXTBEE_API_URL overrides the base URL for a self-hosted TextBee server.
+const textbeeUrl = () =>
+  `${(process.env.TEXTBEE_API_URL?.trim() || "https://api.textbee.dev/api/v1").replace(/\/+$/, "")}/gateway/send-sms`;
 
 /**
  * Normalises a PH number to E.164 (+639XXXXXXXXX). Accepts spaces, dashes, dots and
@@ -46,9 +49,12 @@ export async function sendSms(to, message) {
 
   const body = { recipients: [recipient], message: plain };
   if (process.env.TEXTBEE_DEVICE_ID?.trim()) body.deviceId = process.env.TEXTBEE_DEVICE_ID.trim();
+  // Optional SIM to send from: 0 = SIM 1, 1 = SIM 2 (omit to use the phone's default SIM).
+  const slot = Number.parseInt(process.env.TEXTBEE_SIM_SLOT ?? "", 10);
+  if (Number.isInteger(slot) && slot >= 0 && slot <= 7) body.simSlotIndex = slot;
 
   try {
-    const res = await fetch(TEXTBEE_URL, {
+    const res = await fetch(textbeeUrl(), {
       method: "POST",
       headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify(body),

@@ -13,6 +13,11 @@ const otpSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const failedLoginSchema = new mongoose.Schema(
+  { at: Date, ip: String, userAgent: String },
+  { _id: false },
+);
+
 const userSchema = new mongoose.Schema(
   {
     firstName: { type: String, required: true, trim: true, maxlength: 50 },
@@ -21,12 +26,22 @@ const userSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true, maxlength: 100 },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: true, select: false },
+    // Optional PH mobile number; used to text a staff member their pickup assignments.
+    phone: { type: String, trim: true },
+    // Optional second address for pickup / collection reminders (falls back to the login email).
+    notifyEmail: { type: String, lowercase: true, trim: true },
+    // Optional staff ID (private file reference; never sent to the browser as-is).
+    idDocument: { type: String },
     role: { type: String, enum: ROLES, default: "staff", required: true },
     isActive: { type: Boolean, default: true },
     // Raised on password reset, role change or deactivation to sign the user out everywhere.
     tokenVersion: { type: Number, default: 0 },
     otp: { type: otpSchema, select: false },
     lastLoginAt: Date,
+    // Login lockout: failed password attempts since the last success/lockout.
+    failedAttempts: { type: Number, default: 0 },
+    lockUntil: Date,
+    failedLogins: { type: [failedLoginSchema], select: false },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true },
@@ -60,6 +75,9 @@ userSchema.methods.toSafeJSON = function () {
     lastName: this.lastName,
     name: this.name,
     email: this.email,
+    phone: this.phone ?? "",
+    notifyEmail: this.notifyEmail ?? "",
+    hasIdDocument: Boolean(this.idDocument),
     role: this.role,
     isActive: this.isActive,
     lastLoginAt: this.lastLoginAt ?? null,

@@ -11,6 +11,7 @@ import {
 import {
   Store,
   UserCog,
+  ShieldCheck,
   FileChartLine,
   FolderDot,
   Cpu, // Replacement for RobotArm
@@ -413,4 +414,5 @@ export const workspaceNavigation: NavigationItem[] = [
   { name: "Machine", href: "/machine", icon: Cpu },
   { name: "Compost", href: "/composting", icon: Leaf },
   { name: "Reports", href: "/reports", icon: FileChartLine },
+  { name: "Security", href: "/security", icon: ShieldCheck },
 ];

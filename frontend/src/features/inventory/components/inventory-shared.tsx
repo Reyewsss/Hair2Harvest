@@ -1,3 +1,4 @@
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/shared/ui/tooltip";
 import type { ReactNode } from "react";
 import { ChevronDown, type LucideIcon } from "lucide-react";
 import { buttonVariants } from "../../../shared/ui/button.tsx";
@@ -142,13 +143,19 @@ export function SummaryCard({
   label,
   value,
   note,
+  hint,
 }: {
   label: string;
   value: string;
   note?: string;
+  /** Longer explanation shown when hovering (or focusing) the card. */
+  hint?: string;
 }) {
-  return (
-    <article className="flex flex-col gap-3 rounded-xl border bg-card p-3 md:p-4">
+  const card = (
+    <article
+      tabIndex={hint ? 0 : undefined}
+      className="flex flex-col gap-3 rounded-xl border bg-card p-3 transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:outline-none md:p-4"
+    >
       <p className="text-xs font-medium text-muted-foreground md:text-sm">
         {label}
       </p>
@@ -159,6 +166,16 @@ export function SummaryCard({
         <p className="text-xs font-medium text-muted-foreground">{note}</p>
       ) : null}
     </article>
+  );
+
+  if (!hint) return card;
+  return (
+    <Tooltip>
+      <TooltipTrigger render={card} />
+      <TooltipContent side="bottom" className="max-w-64 whitespace-pre-line text-left">
+        {hint}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 

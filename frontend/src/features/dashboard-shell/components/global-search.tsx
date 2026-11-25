@@ -26,7 +26,7 @@ import { can, canAccessPath, ROLE_LABELS } from "@/features/auth/permissions";
 import { useSuppliers } from "@/features/suppliers/store/suppliers-store";
 import { displayName, formatAddress } from "@/features/suppliers/data/suppliers-data";
 import { accountsApi, type Account } from "@/features/accounts/accounts-api";
-import { LeafLoader } from "@/shared/ui/leaf-loader";
+import { ListSkeleton } from "@/shared/ui/page-skeleton";
 
 /* Global search in the topbar: pages, contributor shops and (for admins) accounts.
  * ↑/↓ to move, Enter to open, Esc to close. Ctrl/⌘+K focuses it (wired in topbar.tsx). */
@@ -293,7 +293,7 @@ function SearchResults({
       <div ref={listRef} className="max-h-[min(26rem,70vh)] overflow-y-auto p-1.5">
         {results.length === 0 ? (
           <Empty>
-            {suppliersLoading ? <LeafLoader label="Searching" size="sm" /> : <>No results for “{query.trim()}”</>}
+            {suppliersLoading ? <ListSkeleton rows={2} className="w-full px-2" /> : <>No results for “{query.trim()}”</>}
           </Empty>
         ) : (
           groups.map((group) => (

@@ -4,6 +4,7 @@ import {
   Blend,
   CheckCircle2,
   Droplets,
+  Eye,
   History,
   Plus,
   Scale,
@@ -11,6 +12,8 @@ import {
   Thermometer,
 } from "lucide-react";
 import { Button } from "@/shared/ui/button.tsx";
+import { ActionButton } from "@/shared/ui/action-button";
+import { TablePager, usePaged } from "@/shared/ui/table-pager";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/shared/ui/table.tsx";
 import { showResult } from "@/shared/ui/result-modal";
 import { AnimatedNumber } from "@/shared/ui/animated-number";
@@ -18,15 +21,18 @@ import { cn } from "@/lib/utils";
 import { errorMessage } from "@/lib/api";
 import { useCan } from "@/features/auth/access";
 import { inventoryApi } from "@/features/inventory/inventory-api";
-import { LeafLoader } from "@/shared/ui/leaf-loader";
+import { ListSkeleton } from "@/shared/ui/page-skeleton";
 import { useAuth } from "@/features/auth/context/auth-context";
 import { DashboardLink } from "@/features/dashboard-shell/components/navigation";
 import { SimControls } from "@/features/simulation/sim-controls";
 import {
   KG_PER_SACK,
   STAGE_DURATION,
+  batchActivity,
   formatDuration,
   formatSimTime,
+  isStoppedStage,
+  motorOn,
   sacksForKg,
   sim,
   stageProgress,
@@ -40,6 +46,7 @@ const fieldClass = "h-10 w-full rounded-lg border-none bg-secondary px-3 text-sm
 export function CompostingContent() {
   const s = useSimulation();
   const { user } = useAuth();
+  const canControl = useCan("monitoring:control"); // Staff can only monitor
   const [creating, setCreating] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -49,6 +56,8 @@ export function CompostingContent() {
     inventoryApi.stock().then(setOnHand).catch(() => setOnHand(null));
   }, []);
   useEffect(refreshStock, [refreshStock]);
+
+  const historyPaged = usePaged(s.batches); // 10 rows per page
 
   const active = s.batches.find((b) => b.id === activeId) ?? s.batches.find((b) => b.stage !== "completed") ?? s.batches[0] ?? null;
 
@@ -67,15 +76,17 @@ export function CompostingContent() {
               {onHand === null ? "—" : <AnimatedNumber value={`${onHand} sack${onHand === 1 ? "" : "s"}`} duration={500} />}
             </p>
           </div>
-          <Button onClick={() => setCreating((v) => !v)} className="h-10 gap-2">
-            <Plus className="size-4" /> New test batch
-          </Button>
+          {canControl ? (
+            <Button onClick={() => setCreating((v) => !v)} className="h-10 gap-2">
+              <Plus className="size-4" /> New test batch
+            </Button>
+          ) : null}
         </div>
       </div>
 
       <SimControls />
 
-      {creating ? (
+      {creating && canControl ? (
         <CreateBatchForm
           operator={user?.name ?? "Operator"}
           onHand={onHand}
@@ -88,7 +99,7 @@ export function CompostingContent() {
         />
       ) : null}
 
-      {active ? <BatchTracker batch={active} clock={s.clock} /> : (
+      {active ? <BatchTracker batch={active} clock={s.clock} canControl={canControl} /> : (
         <div className="rounded-xl border border-dashed py-12 text-center text-muted-foreground">
           No batches yet. Create a test batch to get started.
         </div>
@@ -112,7 +123,7 @@ export function CompostingContent() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {s.batches.map((b) => (
+            {historyPaged.rows.map((b) => (
               <TableRow key={b.id} className={b.id === active?.id ? "bg-muted/50" : ""}>
                 <TableCell className="font-medium">{b.id}</TableCell>
                 <TableCell>{b.machineId ?? "—"}</TableCell>
@@ -126,14 +137,19 @@ export function CompostingContent() {
                   <StageBadge stage={b.stage} />
                 </TableCell>
                 <TableCell className="text-right">
-                  <Button variant="ghost" size="sm" onClick={() => setActiveId(b.id)}>
-                    View
-                  </Button>
+                  <ActionButton
+                    icon={Eye}
+                    label={b.id === active?.id ? "Viewing" : "View"}
+                    tone="default"
+                    disabled={b.id === active?.id}
+                    onClick={() => setActiveId(b.id)}
+                  />
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
+        <TablePager {...historyPaged} />
       </section>
     </div>
   );
@@ -202,7 +218,7 @@ function CreateBatchForm({
           Both test machines are busy. Finish a batch (or use “Next stage”) to free one.
         </p>
       ) : onHand === null ? (
-        <LeafLoader label="Checking inventory" />
+        <ListSkeleton rows={1} />
       ) : onHand < 1 ? (
         <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
           No raw hair on hand. Deliver collected pickups to add sacks to inventory.
@@ -258,14 +274,17 @@ function CreateBatchForm({
   );
 }
 
-function BatchTracker({ batch, clock }: { batch: SimBatch; clock: number }) {
+function BatchTracker({ batch, clock, canControl }: { batch: SimBatch; clock: number; canControl: boolean }) {
   const s = useSimulation();
   const { user } = useAuth();
   const stageIndex = STAGES.indexOf(batch.stage);
   const done = batch.stage === "completed";
   const progress = stageProgress(batch, clock);
-  const left = done ? 0 : STAGE_DURATION[batch.stage] * 1000 - (clock - batch.stageStartedAt);
+  const left = done ? 0 : Math.max(0, STAGE_DURATION[batch.stage] - batch.stageElapsed) * 1000;
   const machine = s.machines.find((m) => m.id === batch.machineId);
+  const activity = batchActivity(batch, machine);
+  const stopped = isStoppedStage(batch.stage);
+  const logsPaged = usePaged(batch.logs); // 10 rows per page
   const lossPct = ((batch.initialWeight - batch.weight) / batch.initialWeight) * 100;
   const moistureTone = batch.moisture < 40 ? "text-amber-600 dark:text-amber-400" : batch.moisture > 70 ? "text-info" : "";
 
@@ -288,7 +307,13 @@ function BatchTracker({ batch, clock }: { batch: SimBatch; clock: number }) {
           </p>
           {!done ? (
             <p className="text-xs text-muted-foreground">
-              {Math.round(progress * 100)}% through {batch.stage} · next stage in {formatDuration(left)} (sim time)
+              {activity === "waiting-machine"
+                ? "Preparation is done. Composting starts as soon as the machine is started."
+                : activity === "paused"
+                  ? `${Math.round(progress * 100)}% through ${batch.stage}. Paused: ${batch.stage} only advances while the machine is running.`
+                  : activity === "sampling-stop"
+                    ? `${Math.round(progress * 100)}% through ${batch.stage}. The machine is stopped for sampling.`
+                    : `${Math.round(progress * 100)}% through ${batch.stage} · next stage in ${formatDuration(left)} (sim time)`}
             </p>
           ) : null}
         </div>
@@ -327,24 +352,74 @@ function BatchTracker({ batch, clock }: { batch: SimBatch; clock: number }) {
         })}
       </div>
 
-      {/* ACTIONS */}
-      {!done ? (
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="secondary" className="h-9 gap-2" onClick={() => { sim.addWater(batch.id, 5); showResult({ type: "success", title: "Water added" }); }}>
-            <Droplets className="size-4" /> Add water (+5%)
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            className="h-9 gap-2"
-            disabled={!machine || !!machine.fault || machine.lidOpen || machine.motor === "mixing"}
-            onClick={() => { sim.mix(machine!.id, user?.name ?? "Operator"); showResult({ type: "success", title: "Mixing cycle started" }); }}
-          >
-            <Blend className="size-4" /> Turn / mix
-          </Button>
-          <Button type="button" variant="outline" className="h-9 gap-2" onClick={() => sim.advanceStage(batch.id)}>
-            <SkipForward className="size-4" /> Next stage (test)
-          </Button>
+      {/* ACTIONS (admins and operators; Staff only monitor) */}
+      {!done && !canControl ? (
+        <p className="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">
+          View only: adding water, mixing and moving stages are for admins and operators.
+        </p>
+      ) : null}
+      {!done && canControl ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <ActionButton
+            icon={Droplets}
+            label="Add water (+5%)"
+            variant="outline"
+            onClick={() => {
+              sim.addWater(batch.id, 5);
+              showResult({ type: "success", title: "Water added" });
+            }}
+          />
+          <ActionButton
+            icon={Blend}
+            label="Turn / mix"
+            variant="outline"
+            disabled={!machine || !!machine.fault || machine.lidOpen || machine.motor === "mixing" || stopped}
+            title={
+              stopped
+                ? "The machine is stopped from sampling onward"
+                : !machine
+                  ? "No machine is loaded"
+                  : machine.fault
+                    ? "Clear the machine fault first"
+                    : machine.lidOpen
+                      ? "Close the lid first"
+                      : machine.motor === "mixing"
+                        ? "Already mixing"
+                        : "Run a 30-minute mixing cycle"
+            }
+            onClick={() => {
+              try {
+                sim.mix(machine!.id, user?.name ?? "Operator");
+                showResult({ type: "success", title: "Mixing cycle started" });
+              } catch (err) {
+                showResult({ type: "error", title: "Can't mix", message: errorMessage(err) });
+              }
+            }}
+          />
+          <ActionButton
+            icon={SkipForward}
+            label="Next stage (test)"
+            variant="outline"
+            tone="muted"
+            title={
+              batch.stage === "preparation" && !motorOn(machine)
+                ? "Start the machine first: composting only begins while the motor is running"
+                : "Testing shortcut: skip to the next stage now"
+            }
+            onClick={() => {
+              try {
+                sim.advanceStage(batch.id);
+              } catch (err) {
+                showResult({ type: "warning", title: "Can't move to the next stage", message: errorMessage(err) });
+              }
+            }}
+          />
+          {!machine ? null : (
+            <span className="text-xs text-muted-foreground">
+              Machine {machine.id} is {machine.motor === "stopped" ? "stopped" : machine.motor}
+              {stopped ? " (stops at sampling)" : ""}.
+            </span>
+          )}
         </div>
       ) : null}
 
@@ -361,20 +436,27 @@ function BatchTracker({ batch, clock }: { batch: SimBatch; clock: number }) {
               <TableHead>Temp (°C)</TableHead>
               <TableHead>Weight (kg)</TableHead>
               <TableHead>Moisture (%)</TableHead>
+              <TableHead title="Nitrogen, % of dry matter">N (%)</TableHead>
+              <TableHead title="Phosphorus, % of dry matter">P (%)</TableHead>
+              <TableHead title="Potassium, % of dry matter">K (%)</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {batch.logs.slice(0, 10).map((log, i) => (
+            {logsPaged.rows.map((log, i) => (
               <TableRow key={`${log.t}-${i}`}>
                 <TableCell className="text-muted-foreground">{formatSimTime(log.t)}</TableCell>
                 <TableCell className={log.event.startsWith("Sensor") ? "text-muted-foreground" : "font-medium"}>{log.event}</TableCell>
                 <TableCell className="tabular-nums">{log.temp?.toFixed(1) ?? "—"}</TableCell>
                 <TableCell className="tabular-nums">{log.weight?.toFixed(1) ?? "—"}</TableCell>
                 <TableCell className="tabular-nums">{log.moisture?.toFixed(1) ?? "—"}</TableCell>
+                <TableCell className="tabular-nums">{log.n?.toFixed(2) ?? "—"}</TableCell>
+                <TableCell className="tabular-nums">{log.p?.toFixed(2) ?? "—"}</TableCell>
+                <TableCell className="tabular-nums">{log.k?.toFixed(2) ?? "—"}</TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
+        <TablePager {...logsPaged} />
       </div>
     </section>
   );

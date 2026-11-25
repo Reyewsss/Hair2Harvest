@@ -42,9 +42,11 @@ import {
   SectionCard,
   StatCard,
   TableEmpty,
+  TablePager,
   TableSkeleton,
   formatPickupDate,
   formatPickupTime,
+  usePaged,
 } from "../components/pickup-ui";
 
 /* ─── Verify collection: photo check + sack count (owns its own state) ─ */
@@ -467,6 +469,9 @@ export function PickupTrackingView() {
     filter === "all"
       ? sortedActive
       : sortedActive.filter((p) => p.status === filter);
+  // 10 rows per table
+  const activePaged = usePaged(visiblePickups);
+  const deliveredPaged = usePaged(deliveredPickups);
   const filterTabs = [
     { value: "all" as const, label: "All", count: activePickups.length },
     {
@@ -565,7 +570,10 @@ export function PickupTrackingView() {
             <button
               key={t.value}
               type="button"
-              onClick={() => setFilter(t.value)}
+              onClick={() => {
+                setFilter(t.value);
+                activePaged.setPage(1);
+              }}
               aria-pressed={filter === t.value}
               className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                 filter === t.value
@@ -616,7 +624,7 @@ export function PickupTrackingView() {
                 }
               />
             ) : (
-              visiblePickups.map((p) => {
+              activePaged.rows.map((p) => {
                 const busy = processingId === p._id;
                 return (
                   <TableRow key={p._id} className={busy ? "opacity-60" : ""}>
@@ -720,6 +728,7 @@ export function PickupTrackingView() {
             )}
           </TableBody>
         </Table>
+        <TablePager {...activePaged} />
       </SectionCard>
 
       {/* Delivered history */}
@@ -752,7 +761,7 @@ export function PickupTrackingView() {
                 description="Delivered pickups and their proof photos will appear here."
               />
             ) : (
-              deliveredPickups.map((p) => (
+              deliveredPaged.rows.map((p) => (
                 <TableRow key={p._id}>
                   <TableCell className="pl-5">
                     {p.photoUrl ? (
@@ -802,6 +811,7 @@ export function PickupTrackingView() {
             )}
           </TableBody>
         </Table>
+        <TablePager {...deliveredPaged} />
       </SectionCard>
     </div>
   );

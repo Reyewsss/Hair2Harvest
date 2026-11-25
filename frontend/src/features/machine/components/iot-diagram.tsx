@@ -109,11 +109,14 @@ export function IotDiagram({
   batch,
   running,
   clock,
+  readOnly = false,
 }: {
   machine: SimMachine;
   batch: SimBatch | null;
   running: boolean;
   clock: number;
+  /** Staff can watch the diagram but can't run the pump or turn on auto irrigation. */
+  readOnly?: boolean;
 }) {
   const [selected, setSelected] = useState<PartId>("esp32");
   const [pumpOn, setPumpOn] = useState(false);
@@ -141,7 +144,7 @@ export function IotDiagram({
   }, [live]);
 
   const runPump = (reason: "manual" | "auto") => {
-    if (!batch || pumpOn || !online) return;
+    if (readOnly || !batch || pumpOn || !online) return;
     sim.addWater(batch.id, 5);
     setPumpOn(true);
     setSelected("pump");
@@ -152,7 +155,7 @@ export function IotDiagram({
 
   // Auto irrigation: the ESP32 waters the pile when it gets too dry.
   useEffect(() => {
-    if (!auto || !live || moisture === null || moisture >= AUTO_BELOW || pumpOn) return;
+    if (readOnly || !auto || !live || moisture === null || moisture >= AUTO_BELOW || pumpOn) return;
     if (Date.now() - lastAuto.current < AUTO_COOLDOWN_MS) return;
     lastAuto.current = Date.now();
     runPump("auto");
@@ -197,7 +200,8 @@ export function IotDiagram({
             <input
               type="checkbox"
               className="size-4 accent-primary"
-              checked={auto}
+              checked={auto && !readOnly}
+              disabled={readOnly}
               onChange={(e) => setAuto(e.target.checked)}
             />
             Auto irrigation (&lt; {AUTO_BELOW}%)
@@ -205,8 +209,8 @@ export function IotDiagram({
           <Button
             type="button"
             className="h-10 gap-2"
-            disabled={!batch || pumpOn || !online}
-            title={!batch ? "Load a batch first" : !online ? "Sensor offline" : undefined}
+            disabled={readOnly || !batch || pumpOn || !online}
+            title={readOnly ? "View only" : !batch ? "Load a batch first" : !online ? "Sensor offline" : undefined}
             onClick={() => runPump("manual")}
           >
             <Droplets className="size-4" />

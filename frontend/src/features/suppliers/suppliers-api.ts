@@ -1,4 +1,4 @@
-import { api, API_BASE } from "@/lib/api";
+import { api } from "@/lib/api";
 import { isFallbackPin, type Supplier } from "./data/suppliers-data";
 
 // Web sign-ups save null coordinates; treat anything non-numeric as "no pin".
@@ -61,19 +61,7 @@ export const suppliersApi = {
   },
 
   create: async (formData: FormData) => {
-    const BASE = API_BASE;
-    const res = await fetch(`${BASE}/suppliers`, {
-      method: "POST",
-      credentials: "include",
-      body: formData,
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      throw Object.assign(new Error(data?.message || "Failed to create supplier"), {
-        status: res.status,
-      });
-    }
-    const data = await res.json();
+    const data = await api<{ supplier: any }>("/suppliers", { method: "POST", body: formData });
     return mapBackendToFrontend(data.supplier);
   },
 
@@ -93,6 +81,7 @@ export const suppliersApi = {
       lat: formData.get("lat"),
       lng: formData.get("lng"),
       pinManuallySet: formData.get("pinManuallySet"),
+      noPin: formData.get("noPin"),
     };
     const res = await api<{ supplier: any }>(`/suppliers/${id}`, {
       method: "PATCH",
@@ -126,128 +115,32 @@ export const suppliersApi = {
   },
 };
 
+// Everything goes through api(), so reads are cached and any change clears the cache.
 export const pickupsApi = {
-  schedule: async (data: {
+  schedule: (data: {
     supplierId: string;
     date: string;
     time: string;
     frequency: string;
     assignedTo?: string;
-  }) => {
-    const BASE = API_BASE;
-    const res = await fetch(`${BASE}/suppliers/pickups`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => null);
-      // Keep the HTTP status so the UI can tell "already exists" (409) apart from other errors.
-      throw Object.assign(new Error(body?.message || "Failed to schedule"), {
-        status: res.status,
-      });
-    }
-    return res.json();
-  },
+  }) => api<any>("/suppliers/pickups", { method: "POST", body: data }),
 
-  update: async (
-    id: string,
-    data: { date: string; time: string; assignedTo?: string },
-  ) => {
-    const BASE = API_BASE;
-    const res = await fetch(`${BASE}/suppliers/pickups/${id}`, {
-      method: "PATCH",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => null);
-      throw Object.assign(new Error(body?.message || "Failed to update pickup"), {
-        status: res.status,
-      });
-    }
-    return res.json();
-  },
+  update: (id: string, data: { date: string; time: string; assignedTo?: string }) =>
+    api<any>(`/suppliers/pickups/${id}`, { method: "PATCH", body: data }),
 
-  remove: async (id: string) => {
-    const BASE = API_BASE;
-    const res = await fetch(`${BASE}/suppliers/pickups/${id}`, {
-      method: "DELETE",
-      credentials: "include",
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => null);
-      throw Object.assign(new Error(body?.message || "Failed to delete pickup"), {
-        status: res.status,
-      });
-    }
-    return res.json();
-  },
+  remove: (id: string) => api<any>(`/suppliers/pickups/${id}`, { method: "DELETE" }),
 
-  archive: async (id: string) => {
-    const BASE = API_BASE;
-    const res = await fetch(`${BASE}/suppliers/pickups/${id}/archive`, {
-      method: "PATCH",
-      credentials: "include",
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => null);
-      throw Object.assign(new Error(body?.message || "Failed to archive pickup"), {
-        status: res.status,
-      });
-    }
-    return res.json();
-  },
+  archive: (id: string) => api<any>(`/suppliers/pickups/${id}/archive`, { method: "PATCH", body: {} }),
 
-  restore: async (id: string) => {
-    const BASE = API_BASE;
-    const res = await fetch(`${BASE}/suppliers/pickups/${id}/restore`, {
-      method: "PATCH",
-      credentials: "include",
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => null);
-      throw Object.assign(new Error(body?.message || "Failed to restore pickup"), {
-        status: res.status,
-      });
-    }
-    return res.json();
-  },
+  restore: (id: string) => api<any>(`/suppliers/pickups/${id}/restore`, { method: "PATCH", body: {} }),
 
-  getSchedule: async (date: string) => {
-    const BASE = API_BASE;
-    const res = await fetch(`${BASE}/suppliers/pickups?date=${date}`, {
-      credentials: "include",
-    });
-    if (!res.ok) throw new Error("Failed to load schedule");
-    return res.json();
-  },
+  getSchedule: (date: string) => api<any>(`/suppliers/pickups?date=${date}`),
 
-  updateStatus: async (id: string, status: string, payload: any = {}) => {
-    const BASE = API_BASE;
-    const res = await fetch(`${BASE}/suppliers/pickups/${id}/status`, {
-      method: "PATCH",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, ...payload }),
-    });
-    if (!res.ok) throw new Error((await res.json()).message || "Failed to update status");
-    return res.json();
-  },
+  updateStatus: (id: string, status: string, payload: any = {}) =>
+    api<any>(`/suppliers/pickups/${id}/status`, { method: "PATCH", body: { status, ...payload } }),
 
-  getOldSchedule: async (
-    date: string,
-    scope: "active" | "past" | "archived" = "active",
-  ) => {
-    const BASE = API_BASE;
-    const res = await fetch(`${BASE}/suppliers/pickups?date=${date}&scope=${scope}`, {
-      credentials: "include",
-    });
-    if (!res.ok) throw new Error("Failed to load schedule");
-    return res.json();
-  },
+  getOldSchedule: (date: string, scope: "active" | "past" | "archived" = "active") =>
+    api<any>(`/suppliers/pickups?date=${date}&scope=${scope}`),
 
   getPickupHistory: async (supplierId: string) => {
     const res = await api<{ pickups: any[] }>(`/suppliers/pickups/supplier/${supplierId}`);
@@ -257,10 +150,7 @@ export const pickupsApi = {
 
 export const staffApi = {
   list: async () => {
-    const BASE = API_BASE;
-    const res = await fetch(`${BASE}/accounts/staff`, { credentials: "include" });
-    if (!res.ok) throw new Error("Failed to load staff");
-    const data = await res.json();
+    const data = await api<{ staff: any[] }>("/accounts/staff");
     return data.staff;
   },
 };

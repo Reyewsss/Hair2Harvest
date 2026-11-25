@@ -1,11 +1,11 @@
 import { Navigate, Outlet, useLocation } from "react-router";
 import { useAuth } from "../context/auth-context.tsx";
-import { LeafLoader } from "@/shared/ui/leaf-loader";
+import { PageSkeleton } from "@/shared/ui/page-skeleton";
 
 const Checking = () => (
   // .astrix-dashboard: dashboard palette (olive leaf) before the dashboard has mounted.
-  <div className="astrix-dashboard flex min-h-screen items-center justify-center">
-    <LeafLoader label="Checking your session" size="lg" />
+  <div className="astrix-dashboard min-h-screen bg-background">
+    <PageSkeleton variant="cards" />
   </div>
 );
 

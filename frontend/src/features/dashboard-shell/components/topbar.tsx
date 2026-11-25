@@ -19,7 +19,7 @@ import {
   scrollToElementById,
   useAuditNotifications,
 } from "./notification-modal";
-import { LeafLoader } from "@/shared/ui/leaf-loader";
+import { ListSkeleton } from "@/shared/ui/page-skeleton";
 
 const AUDIT_TRAIL_ID = "audit-trail";
 
@@ -191,9 +191,7 @@ export function DashboardTopbar() {
                   <DropdownMenuSeparator />
 
                   {isAuditLoading && auditEntries.length === 0 ? (
-                    <div className="flex justify-center px-2 py-4">
-                      <LeafLoader label="Loading" size="sm" />
-                    </div>
+                    <ListSkeleton rows={3} className="px-2 py-3" />
                   ) : auditError && auditEntries.length === 0 ? (
                     <p className="px-2 py-4 text-center text-sm text-muted-foreground">
                       {auditError}

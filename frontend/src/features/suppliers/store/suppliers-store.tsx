@@ -3,6 +3,7 @@ import { suppliersApi } from "../suppliers-api";
 import type { Supplier } from "../data/suppliers-data";
 
 let suppliers: Supplier[] = [];
+let loadedOnce = false; // after the first load, pages show the list at once and refresh behind it
 const listeners = new Set<() => void>();
 
 const setSuppliers = (newList: Supplier[]) => {
@@ -19,7 +20,7 @@ const getSnapshot = () => suppliers;
 
 export function useSuppliers() {
   const list = useSyncExternalStore(subscribe, getSnapshot);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!loadedOnce);
 
   useEffect(() => {
     let mounted = true;
@@ -30,6 +31,7 @@ export function useSuppliers() {
       })
       .catch(console.error)
       .finally(() => {
+        loadedOnce = true;
         if (mounted) setLoading(false);
       });
     return () => {

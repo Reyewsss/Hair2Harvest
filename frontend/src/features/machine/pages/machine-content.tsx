@@ -17,18 +17,22 @@ import {
   Zap,
 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
+import { TablePager, usePaged } from "@/shared/ui/table-pager";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/shared/ui/table";
 import { confirm } from "@/shared/ui/modal";
 import { showResult } from "@/shared/ui/result-modal";
 import { AnimatedNumber } from "@/shared/ui/animated-number";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/context/auth-context";
+import { useCan } from "@/features/auth/access";
 import { DashboardLink } from "@/features/dashboard-shell/components/navigation";
 import { SimControls } from "@/features/simulation/sim-controls";
 import { IotDiagram } from "../components/iot-diagram";
 import {
   formatDuration,
+  batchActivity,
   formatSimTime,
+  isStoppedStage,
   sim,
   stageProgress,
   useSimulation,
@@ -49,14 +53,19 @@ const healthTone: Record<Health, string> = {
 export function MachineContent() {
   const s = useSimulation();
   const { user } = useAuth();
+  const canControl = useCan("monitoring:control"); // Staff can only monitor
   const operator = user?.name ?? "Operator";
   const [machineId, setMachineId] = useState(s.machines[0]?.id);
   const m = s.machines.find((x) => x.id === machineId) ?? s.machines[0];
+  const sessionsPaged = usePaged(s.sessions); // 10 rows per page
   if (!m) return null;
 
   const batch = s.batches.find((b) => b.id === m.batchId) ?? null;
   const health = healthOf(m);
   const active = m.motor === "running" || m.motor === "mixing";
+  // From sampling onward the machine stays stopped.
+  const stoppedForSampling = !!batch && isStoppedStage(batch.stage);
+  const activity = batch ? batchActivity(batch, m) : null;
 
   const ask = (title: string, description: string, label: string, run: () => void, done: string) =>
     confirm({
@@ -65,8 +74,12 @@ export function MachineContent() {
       confirmLabel: label,
       cancelLabel: "Cancel",
       onConfirm: () => {
-        run();
-        showResult({ type: "success", title: done });
+        try {
+          run();
+          showResult({ type: "success", title: done });
+        } catch (err) {
+          showResult({ type: "error", title: "Can't do that", message: err instanceof Error ? err.message : "Please try again." });
+        }
       },
     });
 
@@ -135,16 +148,20 @@ export function MachineContent() {
       {/* ALERTS */}
       {m.fault ? (
         <Alert tone="critical" icon={<AlertTriangle className="size-5" />} title="Machine fault" text={m.fault}>
-          <Button type="button" variant="outline" className="h-9 gap-1.5" onClick={() => sim.resetFault(m.id)}>
-            <Wrench className="size-4" /> Reset fault
-          </Button>
+          {canControl ? (
+            <Button type="button" variant="outline" className="h-9 gap-1.5" onClick={() => sim.resetFault(m.id)}>
+              <Wrench className="size-4" /> Reset fault
+            </Button>
+          ) : null}
         </Alert>
       ) : null}
       {!m.online ? (
         <Alert tone="warning" icon={<WifiOff className="size-5" />} title="Sensor offline" text="Temperature readings are frozen at the last value.">
-          <Button type="button" variant="outline" className="h-9 gap-1.5" onClick={() => sim.resetFault(m.id)}>
-            <Wrench className="size-4" /> Reconnect
-          </Button>
+          {canControl ? (
+            <Button type="button" variant="outline" className="h-9 gap-1.5" onClick={() => sim.resetFault(m.id)}>
+              <Wrench className="size-4" /> Reconnect
+            </Button>
+          ) : null}
         </Alert>
       ) : null}
 
@@ -204,6 +221,15 @@ export function MachineContent() {
               <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
                 <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${stageProgress(batch, s.clock) * 100}%` }} />
               </div>
+              {activity && activity !== "running" && activity !== "done" ? (
+                <p className="rounded-md bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-400">
+                  {activity === "waiting-machine"
+                    ? "Preparation is done. Start the motor to begin composting."
+                    : activity === "paused"
+                      ? `Paused: ${batch.stage} only advances while the motor is running.`
+                      : "Sampling: the machine is stopped."}
+                </p>
+              ) : null}
               <dl className="grid grid-cols-2 gap-2 text-sm">
                 <Mini label="Weight" value={`${batch.weight.toFixed(1)} of ${batch.initialWeight} kg`} />
                 <Mini label="Moisture" value={`${batch.moisture.toFixed(1)}%`} />
@@ -225,7 +251,12 @@ export function MachineContent() {
         </section>
       </div>
 
-      {/* CONTROLS */}
+      {/* CONTROLS (admins and operators; Staff only monitor) */}
+      {!canControl ? (
+        <p className="rounded-xl border border-dashed bg-card px-5 py-4 text-sm text-muted-foreground">
+          View only: starting, stopping, mixing and fault testing are for admins and operators.
+        </p>
+      ) : (
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="flex flex-col gap-4 rounded-xl border bg-card p-5">
           <div>
@@ -236,7 +267,8 @@ export function MachineContent() {
             <Button
               type="button"
               className="h-10 gap-2"
-              disabled={active || !!m.fault || m.lidOpen}
+              disabled={active || !!m.fault || m.lidOpen || stoppedForSampling}
+              title={stoppedForSampling ? "The machine stays stopped from sampling onward" : undefined}
               onClick={() => ask(`Start ${m.id}?`, "The drum starts turning slowly to aerate the batch.", "Start motor", () => sim.startMotor(m.id, operator), "Motor started")}
             >
               <Play className="size-4" /> Start motor
@@ -254,7 +286,8 @@ export function MachineContent() {
               type="button"
               variant="secondary"
               className="h-10 gap-2"
-              disabled={!!m.fault || m.lidOpen || m.motor === "mixing"}
+              disabled={!!m.fault || m.lidOpen || m.motor === "mixing" || stoppedForSampling}
+              title={stoppedForSampling ? "The machine stays stopped from sampling onward" : undefined}
               onClick={() => ask(`Run a mixing cycle on ${m.id}?`, "30 simulated minutes of fast turning. Cools the pile and releases moisture.", "Run mixing", () => sim.mix(m.id, operator), "Mixing cycle started")}
             >
               <Blend className="size-4" /> Mixing cycle
@@ -289,9 +322,10 @@ export function MachineContent() {
           </div>
         </section>
       </div>
+      )}
 
       {/* IOT WIRING MODEL */}
-      <IotDiagram machine={m} batch={batch} running={s.running} clock={s.clock} />
+      <IotDiagram machine={m} batch={batch} running={s.running} clock={s.clock} readOnly={!canControl} />
 
       {/* SESSIONS */}
       <section className="flex flex-col gap-4">
@@ -326,7 +360,7 @@ export function MachineContent() {
                   </TableCell>
                 </TableRow>
               ) : (
-                s.sessions.slice(0, 15).map((x) => (
+                sessionsPaged.rows.map((x) => (
                   <TableRow key={x.id}>
                     <TableCell className="font-medium">{x.id}</TableCell>
                     <TableCell>{x.machineId}</TableCell>
@@ -343,6 +377,7 @@ export function MachineContent() {
               )}
             </TableBody>
           </Table>
+          <TablePager {...sessionsPaged} />
         </div>
       </section>
     </div>

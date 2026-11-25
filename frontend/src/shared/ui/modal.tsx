@@ -1,5 +1,5 @@
-import { useEffect, useSyncExternalStore, type ReactNode } from "react";
-import { X, AlertTriangle } from "lucide-react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { X, AlertTriangle, Loader2 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 
 /* --------------------------------------------------------------
@@ -61,6 +61,56 @@ export function closeModal() {
   }, 200);
 }
 
+/** Confirm / cancel row. While onConfirm runs, the button shows a spinner and both buttons lock. */
+function ConfirmButtons({
+  confirmLabel,
+  cancelLabel,
+  destructive,
+  onConfirm,
+  onCancel,
+}: {
+  confirmLabel: string;
+  cancelLabel: string;
+  destructive: boolean;
+  onConfirm: () => void | Promise<void>;
+  onCancel?: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="flex w-full justify-center gap-2 pt-2">
+      <Button
+        type="button"
+        variant="outline"
+        className="h-10"
+        disabled={busy}
+        onClick={() => {
+          onCancel?.();
+          closeModal();
+        }}
+      >
+        {cancelLabel}
+      </Button>
+      <Button
+        type="button"
+        variant={destructive ? "destructive" : "default"}
+        className="h-10 gap-2"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            await onConfirm();
+          } finally {
+            closeModal();
+          }
+        }}
+      >
+        {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+        {confirmLabel}
+      </Button>
+    </div>
+  );
+}
+
 export function confirm(opts: {
   title: string;
   description?: string;
@@ -90,30 +140,13 @@ export function confirm(opts: {
           ) : null}
         </div>
 
-        <div className="flex w-full justify-center gap-2 pt-2">
-          <Button
-            type="button"
-            variant="outline"
-            className="h-10"
-            onClick={() => {
-              opts.onCancel?.();
-              closeModal();
-            }}
-          >
-            {opts.cancelLabel ?? "Cancel"}
-          </Button>
-          <Button
-            type="button"
-            variant={isDestructive ? "destructive" : "default"}
-            className="h-10"
-            onClick={async () => {
-              await opts.onConfirm();
-              closeModal();
-            }}
-          >
-            {opts.confirmLabel ?? "Confirm"}
-          </Button>
-        </div>
+        <ConfirmButtons
+          confirmLabel={opts.confirmLabel ?? "Confirm"}
+          cancelLabel={opts.cancelLabel ?? "Cancel"}
+          destructive={isDestructive}
+          onConfirm={opts.onConfirm}
+          onCancel={opts.onCancel}
+        />
       </div>
     ),
   });

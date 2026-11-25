@@ -15,6 +15,8 @@ export interface MetricCard {
   value: string;
   trend?: { tone: "positive" | "neutral"; value: string; label: string };
   footnote?: string;
+  /** Longer explanation shown when hovering (or focusing) the card. */
+  hint?: string;
   progress?: number; // 0-100
   segments?: MachineState[];
 }
